@@ -53,7 +53,7 @@ async function saveState(){
   const outfitsObj = {};
   if(typeof outfits !== 'undefined') outfits.forEach((o, i) => { outfitsObj[i] = o; });
   
-  const data = { P, IT, gastos: gastosObj, outfits: outfitsObj, nid, ngid, noid: typeof noid !== 'undefined' ? noid : 2000, openDays: [...openDays] };
+  const data = { P, IT, gastos: gastosObj, outfits: outfitsObj, people, nid, ngid, noid: typeof noid !== 'undefined' ? noid : 2000, openDays: [...openDays] };
   try{ localStorage.setItem('jmtrips_v1', JSON.stringify(data)); }catch(e){}
   try { await setDoc(docRef, data); } catch(e) { console.error("Firebase Error", e); }
 }
@@ -78,6 +78,10 @@ function initFirebaseSync() {
           if (data.outfits[i]) newOutfits[i] = data.outfits[i];
         }
         outfits = newOutfits;
+      }
+      if(data.people) {
+        people = data.people;
+        if(people.length>0 && !activePerson) activePerson = people[0];
       }
       if(data.nid) nid = data.nid;
       if(data.ngid) ngid = data.ngid;
@@ -118,6 +122,10 @@ function loadState(){
            outfits = newOutfits;
         }
       }
+      if(s.people) {
+        people=s.people;
+        if(people.length>0 && !activePerson) activePerson = people[0];
+      }
       if(s.nid) nid=s.nid;
       if(s.ngid) ngid=s.ngid;
       if(s.noid) noid=s.noid;
@@ -146,6 +154,8 @@ let dragSrc=null;
 let nid=200;
 let ngid=1000;
 let noid=2000;
+let people=[];
+let activePerson=null;
 
 /* ══════════ DATA ══════════ */
 let gastos=Array(11).fill(null).map(()=>[]);
@@ -239,11 +249,24 @@ window.toggleForm = function toggleForm(di){
 }
 
 /* ══════════ OUTFITS HELPERS ══════════ */
+window.addPerson = function addPerson(){
+  const n=prompt("Nombre de la persona:");
+  if(n && n.trim()) {
+    const name=n.trim();
+    if(!people.includes(name)) people.push(name);
+    activePerson=name;
+    render();
+  }
+}
+window.selectPerson = function selectPerson(n){
+  activePerson=n;
+  render();
+}
 window.addOutfit = function addOutfit(di){
-  const p=$(`of-per-${di}`)?.value.trim();
+  if(!activePerson)return;
   const t=$(`of-txt-${di}`)?.value.trim();
-  if(!p||!t)return;
-  outfits[di].push({id:noid++,persona:p,texto:t});
+  if(!t)return;
+  outfits[di].push({id:noid++,persona:activePerson,texto:t});
   openOutfitForms.delete(di);
   render();
 }
@@ -364,39 +387,6 @@ function renderIt(){
       </div>`;
     });
 
-    // Outfits section
-    const ofFormOpen=openOutfitForms.has(di);
-    const os=outfits[di];
-    let outfitsH=`<div class="gasto-list">`;
-    if(os.length===0&&!ofFormOpen){
-      outfitsH+=`<div class="gasto-empty">Sin ropa planificada aún</div>`;
-    }
-    os.forEach(o=>{
-      outfitsH+=`<div class="gasto-item">
-        <div class="gasto-cat-dot" style="background:var(--goldd)"></div>
-        <div class="gasto-body">
-          <div class="gasto-concepto">${o.texto}</div>
-          <div class="gasto-cat-label">${o.persona}</div>
-        </div>
-        <button class="gasto-del" onclick="delOutfit(${di},${o.id})" title="Eliminar">×</button>
-      </div>`;
-    });
-    outfitsH+=`</div>`;
-
-    // Inline form outfits
-    outfitsH+=`<div class="gasto-form${ofFormOpen?' open':''}" id="of-${di}">
-      <div class="gf-row">
-        <input class="gf-input" id="of-per-${di}" placeholder="Persona (ej. Joel)" 
-          onkeydown="if(event.key==='Enter')addOutfit(${di})"/>
-        <input class="gf-input" id="of-txt-${di}" placeholder="Outfit (ej. Camisa azul)" 
-          onkeydown="if(event.key==='Enter')addOutfit(${di})"/>
-      </div>
-      <div class="gf-actions" style="margin-top:.4rem">
-        <button class="gf-save" onclick="addOutfit(${di})">✓ Guardar outfit</button>
-        <button class="gf-cancel" onclick="toggleOutfitForm(${di})">Cancelar</button>
-      </div>
-    </div>`;
-
     // Gastos section
     const formOpen=openForms.has(di);
     const catOptions=GCATS.map(c=>`<option>${c}</option>`).join('');
@@ -467,18 +457,6 @@ function renderIt(){
         <div class="acts-section">
           <div class="section-label">Actividades planificadas</div>
           ${actsH}
-        </div>
-        <div class="gastos-section">
-          <div class="gastos-header">
-            <div class="gastos-title-row">
-              <span class="gastos-title">👔 Ropa para hoy</span>
-            </div>
-            <button class="btn-add-gasto" onclick="toggleOutfitForm(${di});event.stopPropagation()">
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-              Agregar ropa
-            </button>
-          </div>
-          ${outfitsH}
         </div>
         <div class="gastos-section">
           <div class="gastos-header">
@@ -633,19 +611,99 @@ function renderMv(){
   return h;
 }
 
+/* ══════════ OUTFITS VIEW ══════════ */
+function renderOutfits(){
+  let h=`<div class="hero" style="margin-bottom:1rem">
+    <div><h2>Equipaje de <em>Viaje</em></h2>
+    <div class="hero-sub">Organiza la ropa por persona para cada día</div></div>
+  </div>`;
+  
+  let pChips = people.map(p=>`<button class="btn" style="width:auto;display:inline-block;margin-right:8px;margin-bottom:8px;background:${p===activePerson?'var(--gold)':'var(--card2)'};color:${p===activePerson?'var(--bg)':'var(--text)'};border:none;padding:.4rem .8rem;border-radius:var(--r);font-family:var(--fb);font-weight:500;font-size:.78rem;cursor:pointer;transition:var(--tr)" onclick="selectPerson('${p}')">${p}</button>`).join('');
+  pChips += `<button class="btn" style="width:auto;display:inline-block;margin-bottom:8px;background:transparent;color:var(--gold);border:1px dashed var(--goldd);padding:.4rem .8rem;border-radius:var(--r);font-family:var(--fb);font-weight:500;font-size:.78rem;cursor:pointer" onclick="addPerson()">+ Añadir Persona</button>`;
+  
+  h += `<div style="margin-bottom:1.5rem;display:flex;flex-wrap:wrap">${pChips}</div>`;
+
+  if(!activePerson) {
+    return h + `<div class="mv-empty" style="text-align:left;background:transparent;border:none">Selecciona o añade una persona arriba para comenzar a planificar su ropa.</div>`;
+  }
+
+  IT.forEach((day,di)=>{
+    const os=outfits[di].filter(o=>o.persona===activePerson);
+    const isOpen=openDays.has(di);
+    const ofFormOpen=openOutfitForms.has(di);
+    
+    let oh=`<div class="gasto-list">`;
+    if(os.length===0 && !ofFormOpen){
+      oh+=`<div class="gasto-empty">Sin ropa planificada para ${activePerson} este día.</div>`;
+    }
+    os.forEach(o=>{
+      oh+=`<div class="gasto-item">
+        <div class="gasto-cat-dot" style="background:var(--gold)"></div>
+        <div class="gasto-body">
+          <div class="gasto-concepto">${o.texto}</div>
+        </div>
+        <button class="gasto-del" onclick="delOutfit(${di},${o.id})" title="Eliminar">×</button>
+      </div>`;
+    });
+    oh+=`</div>`;
+
+    oh+=`<div class="gasto-form${ofFormOpen?' open':''}" id="of-${di}">
+      <div class="gf-row" style="grid-template-columns:1fr">
+        <input class="gf-input" id="of-txt-${di}" placeholder="Ej: Camisa de lino y short" 
+          onkeydown="if(event.key==='Enter')addOutfit(${di})"/>
+      </div>
+      <div class="gf-actions" style="margin-top:.4rem">
+        <button class="gf-save" onclick="addOutfit(${di})">✓ Guardar prenda</button>
+        <button class="gf-cancel" onclick="toggleOutfitForm(${di})">Cancelar</button>
+      </div>
+    </div>`;
+
+    h+=`<div class="day-card" id="dc-${di}">
+      <div class="dh" onclick="togDay(${di})">
+        <div class="dnum">${String(di+1).padStart(2,'0')}</div>
+        <div class="dinfo">
+          <div class="dtitle">${day.day}</div>
+          <div class="dsub">
+            <span class="wchip">${day.route}</span>
+          </div>
+        </div>
+        <div class="dright">
+          ${os.length>0?`<span style="font-size:.62rem;color:var(--dim)">${os.length} prendas</span>`:''}
+          <svg class="chev${isOpen?' open':''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+        </div>
+      </div>
+      <div class="card-body${isOpen?' open':''}">
+        <div class="gastos-section" style="border-top:none;padding-top:0">
+          <div class="gastos-header">
+            <span class="gastos-title" style="letter-spacing:.05em">👕 Prendas de ${activePerson}</span>
+            <button class="btn-add-gasto" onclick="toggleOutfitForm(${di});event.stopPropagation()">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              Añadir prenda
+            </button>
+          </div>
+          ${oh}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  return h;
+}
+
 /* ══════════ RENDER ══════════ */
 function render(){
   saveState();
   const mc=$('main');
   if(VIEW==='it') mc.innerHTML=renderIt();
   else if(VIEW==='gas') mc.innerHTML=renderGas();
+  else if(VIEW==='outfits') mc.innerHTML=renderOutfits();
   else mc.innerHTML=renderMv();
   renderSidebar();
 }
 
 window.go = function go(v){
   VIEW=v;
-  ['it','gas','mv'].forEach(k=>{
+  ['it','gas','mv','outfits'].forEach(k=>{
     $('st-'+k)?.classList.toggle('active',k===v);
     $('mt-'+k)?.classList.toggle('active',k===v);
   });
