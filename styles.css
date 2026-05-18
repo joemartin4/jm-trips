@@ -1,11 +1,11 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:16px;scroll-behavior:smooth}
-body{font-family:'DM Sans',sans-serif;font-weight:300;background:#0e1410;color:#e8e2d6;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+html{font-size:17.5px;scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;font-weight:400;background:#151a17;color:#fdfaf5;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 :root{
-  --bg:#0e1410;--card:#161d18;--card2:#1c2520;--hover:#212c24;
-  --border:rgba(200,185,140,.11);--borderl:rgba(200,185,140,.22);
-  --gold:#c8b98c;--goldd:rgba(200,185,140,.5);--goldg:rgba(200,185,140,.07);
-  --green:#4a7c59;--text:#e8e2d6;--muted:#9a9080;--dim:#6b6358;
+  --bg:#151a17;--card:#1d2420;--card2:#262f29;--hover:#2f3a33;
+  --border:rgba(215,200,160,.16);--borderl:rgba(215,200,160,.32);
+  --gold:#dbcca2;--goldd:rgba(219,204,162,.6);--goldg:rgba(219,204,162,.12);
+  --green:#588e68;--text:#fdfaf5;--muted:#bfb8a9;--dim:#948d80;
   --red:#c0524a;--redbg:rgba(192,82,74,.12);
   --teal:#3d8c7a;--tealbg:rgba(61,140,122,.12);
   --amber:#b5893a;--amberbg:rgba(181,137,58,.1);
@@ -64,12 +64,12 @@ body{font-family:'DM Sans',sans-serif;font-weight:300;background:#0e1410;color:#
 
 /* hero */
 .hero{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.6rem;padding-bottom:1.4rem;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.hero h2{font-family:var(--fd);font-size:2rem;font-weight:300;line-height:1.1;letter-spacing:.01em}
+.hero h2{font-family:var(--fd);font-size:2rem;font-weight:400;line-height:1.1;letter-spacing:.01em}
 .hero h2 em{font-style:italic;color:var(--gold)}
 .hero-sub{font-size:.74rem;color:var(--muted);margin-top:.22rem;letter-spacing:.04em}
 .hstats{display:flex;gap:1.4rem;flex-wrap:wrap}
 .hstat{text-align:right}
-.hv{font-family:var(--fd);font-size:1.7rem;font-weight:300;line-height:1;color:var(--gold)}
+.hv{font-family:var(--fd);font-size:1.7rem;font-weight:400;line-height:1;color:var(--gold)}
 .hv.ok{color:var(--teal)}.hv.bad{color:var(--red)}
 .hl{font-size:.6rem;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;margin-top:2px}
 .hpp{font-size:.6rem;color:var(--dim);margin-top:1px;font-style:italic}
@@ -93,7 +93,7 @@ body{font-family:'DM Sans',sans-serif;font-weight:300;background:#0e1410;color:#
 
 .dh{display:flex;align-items:center;gap:.65rem;padding:.9rem 1.15rem;cursor:pointer;transition:var(--tr);user-select:none}
 .dh:hover{background:var(--hover)}
-.dnum{font-family:var(--fd);font-size:1.35rem;font-weight:300;color:var(--gold);line-height:1;min-width:1.9rem}
+.dnum{font-family:var(--fd);font-size:1.35rem;font-weight:400;color:var(--gold);line-height:1;min-width:1.9rem}
 .dinfo{flex:1;min-width:0}
 .dtitle{font-family:var(--fd);font-size:.98rem;font-weight:400;letter-spacing:.02em}
 .dsub{display:flex;align-items:center;gap:.55rem;margin-top:2px;flex-wrap:wrap}
@@ -171,10 +171,10 @@ body{font-family:'DM Sans',sans-serif;font-weight:300;background:#0e1410;color:#
 .gasto-form.open{display:flex}
 .gf-row{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
 .gf-row3{display:grid;grid-template-columns:2fr 1.1fr 1fr;gap:.45rem}
-.gf-input{padding:.45rem .65rem;font-size:.77rem;font-family:var(--fb);font-weight:300;background:var(--card);border:1px solid var(--borderl);border-radius:var(--r);color:var(--text);outline:none;transition:var(--tr);width:100%}
+.gf-input{padding:.45rem .65rem;font-size:.77rem;font-family:var(--fb);font-weight:400;background:var(--card);border:1px solid var(--borderl);border-radius:var(--r);color:var(--text);outline:none;transition:var(--tr);width:100%}
 .gf-input:focus{border-color:var(--goldd);background:var(--hover)}
 .gf-input::placeholder{color:var(--dim)}
-.gf-select{padding:.45rem .65rem;font-size:.77rem;font-family:var(--fb);font-weight:300;background:var(--card);border:1px solid var(--borderl);border-radius:var(--r);color:var(--text);outline:none;cursor:pointer;width:100%}
+.gf-select{padding:.45rem .65rem;font-size:.77rem;font-family:var(--fb);font-weight:400;background:var(--card);border:1px solid var(--borderl);border-radius:var(--r);color:var(--text);outline:none;cursor:pointer;width:100%}
 .gf-select option{background:var(--card)}
 .gf-actions{display:flex;gap:.4rem}
 .gf-save{flex:1;padding:.42rem;background:var(--gold);color:var(--bg);border:none;border-radius:var(--r);font-family:var(--fb);font-size:.75rem;font-weight:500;cursor:pointer;transition:var(--tr)}
@@ -197,7 +197,7 @@ body{font-family:'DM Sans',sans-serif;font-weight:300;background:#0e1410;color:#
 .srow{display:flex;justify-content:space-between;align-items:flex-start;padding:.42rem 0;border-bottom:1px solid var(--border)}
 .srow:last-child{border-bottom:none}
 .slbl{font-size:.72rem;color:var(--muted)}
-.sval{font-family:var(--fd);font-size:1.2rem;font-weight:300;color:var(--text);text-align:right}
+.sval{font-family:var(--fd);font-size:1.2rem;font-weight:400;color:var(--text);text-align:right}
 .sval.ok{color:var(--teal)}.sval.bad{color:var(--red)}.sval.gold{color:var(--gold)}
 .ssub{font-size:.61rem;color:var(--dim);text-align:right;margin-top:1px}
 
@@ -240,7 +240,7 @@ body{font-family:'DM Sans',sans-serif;font-weight:300;background:#0e1410;color:#
 .modal h2{font-family:var(--fd);font-size:1.2rem;font-weight:400;color:var(--gold);margin-bottom:1.1rem;letter-spacing:.02em}
 .field{margin-bottom:.75rem}
 .field label{display:block;font-size:.61rem;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);margin-bottom:.28rem}
-.field input,.field select,.field textarea{width:100%;padding:.52rem .75rem;font-size:.78rem;font-family:var(--fb);font-weight:300;background:var(--card2);border:1px solid var(--borderl);border-radius:var(--r);color:var(--text);transition:var(--tr);outline:none}
+.field input,.field select,.field textarea{width:100%;padding:.52rem .75rem;font-size:.78rem;font-family:var(--fb);font-weight:400;background:var(--card2);border:1px solid var(--borderl);border-radius:var(--r);color:var(--text);transition:var(--tr);outline:none}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--goldd);background:var(--hover)}
 .field select option{background:var(--card)}
 .field textarea{resize:vertical;min-height:52px;line-height:1.5}
