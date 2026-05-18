@@ -50,8 +50,10 @@ async function saveState(){
   // Firestore does not support nested arrays. Convert gastos to an object.
   const gastosObj = {};
   gastos.forEach((g, i) => { gastosObj[i] = g; });
+  const outfitsObj = {};
+  if(typeof outfits !== 'undefined') outfits.forEach((o, i) => { outfitsObj[i] = o; });
   
-  const data = { P, IT, gastos: gastosObj, nid, ngid, openDays: [...openDays] };
+  const data = { P, IT, gastos: gastosObj, outfits: outfitsObj, nid, ngid, noid: typeof noid !== 'undefined' ? noid : 2000, openDays: [...openDays] };
   try{ localStorage.setItem('jmtrips_v1', JSON.stringify(data)); }catch(e){}
   try { await setDoc(docRef, data); } catch(e) { console.error("Firebase Error", e); }
 }
@@ -70,8 +72,16 @@ function initFirebaseSync() {
         }
         gastos = newGastos;
       }
+      if(data.outfits) {
+        const newOutfits = Array(11).fill(null).map(()=>[]);
+        for (let i = 0; i < 11; i++) {
+          if (data.outfits[i]) newOutfits[i] = data.outfits[i];
+        }
+        outfits = newOutfits;
+      }
       if(data.nid) nid = data.nid;
       if(data.ngid) ngid = data.ngid;
+      if(data.noid) noid = data.noid;
       if(data.openDays) openDays = new Set(data.openDays);
       render();
       isSyncing = false;
@@ -98,8 +108,19 @@ function loadState(){
            gastos = newGastos;
         }
       }
+      if(s.outfits) {
+        if (Array.isArray(s.outfits)) outfits = s.outfits; 
+        else {
+           const newOutfits = Array(11).fill(null).map(()=>[]);
+           for (let i = 0; i < 11; i++) {
+             if (s.outfits[i]) newOutfits[i] = s.outfits[i];
+           }
+           outfits = newOutfits;
+        }
+      }
       if(s.nid) nid=s.nid;
       if(s.ngid) ngid=s.ngid;
+      if(s.noid) noid=s.noid;
       if(s.openDays) openDays=new Set(s.openDays);
     }
   }catch(e){}
@@ -118,14 +139,17 @@ let P=2;
 let VIEW='it';
 let openDays=new Set([0]);
 let openForms=new Set();
+let openOutfitForms=new Set();
 let editCtx=null;
 let selDay=null;
 let dragSrc=null;
 let nid=200;
 let ngid=1000;
+let noid=2000;
 
 /* ══════════ DATA ══════════ */
 let gastos=Array(11).fill(null).map(()=>[]);
+let outfits=Array(11).fill(null).map(()=>[]);
 
 let IT=[
   {day:'Lunes 6 de julio',route:'Aeropuerto Tocumen + Hotel',acts:[
@@ -211,6 +235,25 @@ window.delGasto = function delGasto(di,gid){
 window.toggleForm = function toggleForm(di){
   if(openForms.has(di))openForms.delete(di);
   else openForms.add(di);
+  render();
+}
+
+/* ══════════ OUTFITS HELPERS ══════════ */
+window.addOutfit = function addOutfit(di){
+  const p=$(`of-per-${di}`)?.value.trim();
+  const t=$(`of-txt-${di}`)?.value.trim();
+  if(!p||!t)return;
+  outfits[di].push({id:noid++,persona:p,texto:t});
+  openOutfitForms.delete(di);
+  render();
+}
+window.delOutfit = function delOutfit(di,oid){
+  outfits[di]=outfits[di].filter(o=>o.id!==oid);
+  render();
+}
+window.toggleOutfitForm = function toggleOutfitForm(di){
+  if(openOutfitForms.has(di))openOutfitForms.delete(di);
+  else openOutfitForms.add(di);
   render();
 }
 
@@ -321,6 +364,39 @@ function renderIt(){
       </div>`;
     });
 
+    // Outfits section
+    const ofFormOpen=openOutfitForms.has(di);
+    const os=outfits[di];
+    let outfitsH=`<div class="gasto-list">`;
+    if(os.length===0&&!ofFormOpen){
+      outfitsH+=`<div class="gasto-empty">Sin ropa planificada aún</div>`;
+    }
+    os.forEach(o=>{
+      outfitsH+=`<div class="gasto-item">
+        <div class="gasto-cat-dot" style="background:var(--goldd)"></div>
+        <div class="gasto-body">
+          <div class="gasto-concepto">${o.texto}</div>
+          <div class="gasto-cat-label">${o.persona}</div>
+        </div>
+        <button class="gasto-del" onclick="delOutfit(${di},${o.id})" title="Eliminar">×</button>
+      </div>`;
+    });
+    outfitsH+=`</div>`;
+
+    // Inline form outfits
+    outfitsH+=`<div class="gasto-form${ofFormOpen?' open':''}" id="of-${di}">
+      <div class="gf-row">
+        <input class="gf-input" id="of-per-${di}" placeholder="Persona (ej. Joel)" 
+          onkeydown="if(event.key==='Enter')addOutfit(${di})"/>
+        <input class="gf-input" id="of-txt-${di}" placeholder="Outfit (ej. Camisa azul)" 
+          onkeydown="if(event.key==='Enter')addOutfit(${di})"/>
+      </div>
+      <div class="gf-actions" style="margin-top:.4rem">
+        <button class="gf-save" onclick="addOutfit(${di})">✓ Guardar outfit</button>
+        <button class="gf-cancel" onclick="toggleOutfitForm(${di})">Cancelar</button>
+      </div>
+    </div>`;
+
     // Gastos section
     const formOpen=openForms.has(di);
     const catOptions=GCATS.map(c=>`<option>${c}</option>`).join('');
@@ -391,6 +467,18 @@ function renderIt(){
         <div class="acts-section">
           <div class="section-label">Actividades planificadas</div>
           ${actsH}
+        </div>
+        <div class="gastos-section">
+          <div class="gastos-header">
+            <div class="gastos-title-row">
+              <span class="gastos-title">👔 Ropa para hoy</span>
+            </div>
+            <button class="btn-add-gasto" onclick="toggleOutfitForm(${di});event.stopPropagation()">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              Agregar ropa
+            </button>
+          </div>
+          ${outfitsH}
         </div>
         <div class="gastos-section">
           <div class="gastos-header">
