@@ -1,3 +1,6 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
 /* ══════════ WEATHER & COLORS ══════════ */
 const WX=[
   {i:'🌧️',d:'Lluvioso',h:29,l:26,t:'Lleva paraguas hoy'},
@@ -27,36 +30,86 @@ const GCAT={
 };
 const GCATS=Object.keys(GCAT);
 
-/* ══════════ STORAGE ══════════ */
-const STORE_KEY='jmtrips_v1';
+/* ══════════ STORAGE & FIREBASE ══════════ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDhlyfT6_mTtsy7tKmED8rP0AfYs3LVzro",
+  authDomain: "jm-trips.firebaseapp.com",
+  projectId: "jm-trips",
+  storageBucket: "jm-trips.firebasestorage.app",
+  messagingSenderId: "295499693424",
+  appId: "1:295499693424:web:0f56978753af88c6e1a3b5"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const docRef = doc(db, "trips", "main");
 
-function saveState(){
-  try{
-    localStorage.setItem(STORE_KEY,JSON.stringify({
-      P,IT,gastos,nid,ngid,
-      openDays:[...openDays]
-    }));
-  }catch(e){console.warn('No se pudo guardar',e);}
+let isSyncing = false;
+
+async function saveState(){
+  if (isSyncing) return;
+  // Firestore does not support nested arrays. Convert gastos to an object.
+  const gastosObj = {};
+  gastos.forEach((g, i) => { gastosObj[i] = g; });
+  
+  const data = { P, IT, gastos: gastosObj, nid, ngid, openDays: [...openDays] };
+  try{ localStorage.setItem('jmtrips_v1', JSON.stringify(data)); }catch(e){}
+  try { await setDoc(docRef, data); } catch(e) { console.error("Firebase Error", e); }
+}
+
+function initFirebaseSync() {
+  onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      isSyncing = true;
+      const data = snap.data();
+      if(data.P) P = data.P;
+      if(data.IT) IT = data.IT;
+      if(data.gastos) {
+        const newGastos = Array(11).fill(null).map(()=>[]);
+        for (let i = 0; i < 11; i++) {
+          if (data.gastos[i]) newGastos[i] = data.gastos[i];
+        }
+        gastos = newGastos;
+      }
+      if(data.nid) nid = data.nid;
+      if(data.ngid) ngid = data.ngid;
+      if(data.openDays) openDays = new Set(data.openDays);
+      render();
+      isSyncing = false;
+    } else {
+      saveState();
+    }
+  });
 }
 
 function loadState(){
   try{
-    const raw=localStorage.getItem(STORE_KEY);
-    if(!raw)return false;
-    const s=JSON.parse(raw);
-    if(s.P)P=s.P;
-    if(s.IT)IT=s.IT;
-    if(s.gastos)gastos=s.gastos;
-    if(s.nid)nid=s.nid;
-    if(s.ngid)ngid=s.ngid;
-    if(s.openDays)openDays=new Set(s.openDays);
-    return true;
-  }catch(e){return false;}
+    const raw=localStorage.getItem('jmtrips_v1');
+    if(raw) {
+      const s=JSON.parse(raw);
+      if(s.P) P=s.P;
+      if(s.IT) IT=s.IT;
+      if(s.gastos) {
+        if (Array.isArray(s.gastos)) gastos = s.gastos; 
+        else {
+           const newGastos = Array(11).fill(null).map(()=>[]);
+           for (let i = 0; i < 11; i++) {
+             if (s.gastos[i]) newGastos[i] = s.gastos[i];
+           }
+           gastos = newGastos;
+        }
+      }
+      if(s.nid) nid=s.nid;
+      if(s.ngid) ngid=s.ngid;
+      if(s.openDays) openDays=new Set(s.openDays);
+    }
+  }catch(e){}
+  initFirebaseSync();
+  return true;
 }
 
 window.resetState = function resetState(){
   if(!confirm('¿Borrar todos los cambios y volver al itinerario original? Esta acción no se puede deshacer.'))return;
-  localStorage.removeItem(STORE_KEY);
+  localStorage.removeItem('jmtrips_v1');
   location.reload();
 }
 
