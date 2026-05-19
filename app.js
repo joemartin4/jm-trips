@@ -17,6 +17,16 @@ const WX=[
 ];
 const CC={Comida:'#4a7c59',Turismo:'#3d7ca8',Hotel:'#6a6db5',Logística:'#666',Transporte:'#888',Tour:'#a05a30',Playa:'#3d7ca8',Actividad:'#9a3060',Espiritual:'#6a6db5',Evento:'#9a7a20',Libre:'#555',Ocio:'#3d7ca8'};
 
+// Outfit categories
+const OCAT={
+  superior:{label:'Prenda Superior',icon:'👕',color:'#3d7ca8'},
+  inferior:{label:'Prenda Inferior',icon:'👖',color:'#4a7c59'},
+  conjunto:{label:'Conjunto Completo',icon:'👔',color:'#6a6db5'},
+  calzado:{label:'Calzado',icon:'👟',color:'#a05a30'},
+  accesorios:{label:'Accesorios',icon:'🎒',color:'#9a7a20'}
+};
+const OCAT_KEYS=Object.keys(OCAT);
+
 // Expense categories with colors
 const GCAT={
   'Comida / Restaurante':'#4a7c59',
@@ -150,6 +160,8 @@ let openForms=new Set();
 let openOutfitForms=new Set();
 let editCtx=null;
 let selDay=null;
+let editingOutfit=null; // {di, idx} for inline editing
+let outfitDragSrc=null;
 let dragSrc=null;
 let nid=200;
 let ngid=1000;
@@ -265,8 +277,9 @@ window.selectPerson = function selectPerson(n){
 window.addOutfit = function addOutfit(di){
   if(!activePerson)return;
   const t=$(`of-txt-${di}`)?.value.trim();
+  const cat=$(`of-cat-${di}`)?.value||'superior';
   if(!t)return;
-  outfits[di].push({id:noid++,persona:activePerson,texto:t});
+  outfits[di].push({id:noid++,persona:activePerson,texto:t,cat});
   openOutfitForms.delete(di);
   render();
 }
@@ -277,6 +290,49 @@ window.delOutfit = function delOutfit(di,oid){
 window.toggleOutfitForm = function toggleOutfitForm(di){
   if(openOutfitForms.has(di))openOutfitForms.delete(di);
   else openOutfitForms.add(di);
+  render();
+}
+window.startEditOutfit = function startEditOutfit(di,idx){
+  editingOutfit={di,idx};
+  render();
+}
+window.saveEditOutfit = function saveEditOutfit(di,idx){
+  const t=$(`oe-txt-${di}-${idx}`)?.value.trim();
+  const cat=$(`oe-cat-${di}-${idx}`)?.value||'superior';
+  if(!t)return;
+  outfits[di][idx].texto=t;
+  outfits[di][idx].cat=cat;
+  editingOutfit=null;
+  render();
+}
+window.cancelEditOutfit = function cancelEditOutfit(){
+  editingOutfit=null;
+  render();
+}
+// Outfit drag & drop
+window.outfitDs = function outfitDs(e,di,idx){
+  outfitDragSrc={di,idx};
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+}
+window.outfitDov = function outfitDov(e){
+  e.preventDefault();
+  e.currentTarget.classList.add('dragover');
+}
+window.outfitDl = function outfitDl(e){
+  e.currentTarget.classList.remove('dragover');
+}
+window.outfitDdr = function outfitDdr(e,di,idx){
+  e.currentTarget.classList.remove('dragover');
+  if(!outfitDragSrc||(outfitDragSrc.di===di&&outfitDragSrc.idx===idx))return;
+  // Only allow reorder within the same day and person
+  if(outfitDragSrc.di!==di)return;
+  const personOutfits=outfits[di].filter(o=>o.persona===activePerson);
+  const allOther=outfits[di].filter(o=>o.persona!==activePerson);
+  const srcItem=personOutfits.splice(outfitDragSrc.idx,1)[0];
+  personOutfits.splice(idx,0,srcItem);
+  outfits[di]=[...allOther,...personOutfits];
+  outfitDragSrc=null;
   render();
 }
 
@@ -613,15 +669,40 @@ function renderMv(){
 
 /* ══════════ OUTFITS VIEW ══════════ */
 function renderOutfits(){
+  // Global summary across all days for this person
+  let globalCounts={};
+  OCAT_KEYS.forEach(k=>globalCounts[k]=0);
+  if(activePerson){
+    IT.forEach((_,di)=>{
+      outfits[di].filter(o=>o.persona===activePerson).forEach(o=>{
+        const c=o.cat||'superior';
+        globalCounts[c]=(globalCounts[c]||0)+1;
+      });
+    });
+  }
+  const totalItems=Object.values(globalCounts).reduce((a,b)=>a+b,0);
+
   let h=`<div class="hero" style="margin-bottom:1rem">
     <div><h2>Equipaje de <em>Viaje</em></h2>
     <div class="hero-sub">Organiza la ropa por persona para cada día</div></div>
+    ${activePerson&&totalItems>0?`<div class="hstats">
+      <div class="hstat"><div class="hv">${totalItems}</div><div class="hl">Prendas Total</div></div>
+    </div>`:''}
   </div>`;
   
   let pChips = people.map(p=>`<button class="btn" style="width:auto;display:inline-block;margin-right:8px;margin-bottom:8px;background:${p===activePerson?'var(--gold)':'var(--card2)'};color:${p===activePerson?'var(--bg)':'var(--text)'};border:none;padding:.4rem .8rem;border-radius:var(--r);font-family:var(--fb);font-weight:500;font-size:.78rem;cursor:pointer;transition:var(--tr)" onclick="selectPerson('${p}')">${p}</button>`).join('');
   pChips += `<button class="btn" style="width:auto;display:inline-block;margin-bottom:8px;background:transparent;color:var(--gold);border:1px dashed var(--goldd);padding:.4rem .8rem;border-radius:var(--r);font-family:var(--fb);font-weight:500;font-size:.78rem;cursor:pointer" onclick="addPerson()">+ Añadir Persona</button>`;
   
-  h += `<div style="margin-bottom:1.5rem;display:flex;flex-wrap:wrap">${pChips}</div>`;
+  h += `<div style="margin-bottom:1rem;display:flex;flex-wrap:wrap">${pChips}</div>`;
+
+  // Global summary bar
+  if(activePerson&&totalItems>0){
+    let summaryChips=OCAT_KEYS.filter(k=>globalCounts[k]>0).map(k=>{
+      const c=OCAT[k];
+      return `<span class="outfit-summary-chip" style="border-color:${c.color}40">${c.icon} ${globalCounts[k]} ${c.label}${globalCounts[k]>1?'s':''}</span>`;
+    }).join('');
+    h+=`<div class="outfit-global-summary">${summaryChips}</div>`;
+  }
 
   if(!activePerson) {
     return h + `<div class="mv-empty" style="text-align:left;background:transparent;border:none">Selecciona o añade una persona arriba para comenzar a planificar su ropa.</div>`;
@@ -631,25 +712,62 @@ function renderOutfits(){
     const os=outfits[di].filter(o=>o.persona===activePerson);
     const isOpen=openDays.has(di);
     const ofFormOpen=openOutfitForms.has(di);
+    // Activity names for subtitle
+    const actNames=day.acts.map(a=>a.name).join(' · ');
+    // Category select options
+    const catOpts=OCAT_KEYS.map(k=>`<option value="${k}">${OCAT[k].icon} ${OCAT[k].label}</option>`).join('');
+
+    // Day category counts
+    let dayCounts={};
+    OCAT_KEYS.forEach(k=>dayCounts[k]=0);
+    os.forEach(o=>{const c=o.cat||'superior';dayCounts[c]=(dayCounts[c]||0)+1;});
+    const daySummary=OCAT_KEYS.filter(k=>dayCounts[k]>0).map(k=>`${OCAT[k].icon}${dayCounts[k]}`).join(' ');
     
     let oh=`<div class="gasto-list">`;
     if(os.length===0 && !ofFormOpen){
       oh+=`<div class="gasto-empty">Sin ropa planificada para ${activePerson} este día.</div>`;
     }
-    os.forEach(o=>{
-      oh+=`<div class="gasto-item">
-        <div class="gasto-cat-dot" style="background:var(--gold)"></div>
-        <div class="gasto-body">
-          <div class="gasto-concepto">${o.texto}</div>
-        </div>
-        <button class="gasto-del" onclick="delOutfit(${di},${o.id})" title="Eliminar">×</button>
-      </div>`;
+    os.forEach((o,idx)=>{
+      const cat=OCAT[o.cat||'superior']||OCAT.superior;
+      const isEditing=editingOutfit&&editingOutfit.di===di&&editingOutfit.idx===idx;
+      if(isEditing){
+        // Inline edit mode
+        const editCatOpts=OCAT_KEYS.map(k=>`<option value="${k}"${(o.cat||'superior')===k?' selected':''}>${OCAT[k].icon} ${OCAT[k].label}</option>`).join('');
+        oh+=`<div class="outfit-edit-form">
+          <select class="gf-select" id="oe-cat-${di}-${idx}" style="margin-bottom:.4rem">${editCatOpts}</select>
+          <input class="gf-input" id="oe-txt-${di}-${idx}" value="${o.texto.replace(/"/g,'&quot;')}" 
+            onkeydown="if(event.key==='Enter')saveEditOutfit(${di},${idx});if(event.key==='Escape')cancelEditOutfit()"/>
+          <div class="gf-actions" style="margin-top:.4rem">
+            <button class="gf-save" onclick="saveEditOutfit(${di},${idx})">✓ Guardar</button>
+            <button class="gf-cancel" onclick="cancelEditOutfit()">Cancelar</button>
+          </div>
+        </div>`;
+      } else {
+        oh+=`<div class="outfit-item"
+          draggable="true"
+          ondragstart="outfitDs(event,${di},${idx})"
+          ondragover="outfitDov(event)"
+          ondrop="outfitDdr(event,${di},${idx})"
+          ondragleave="outfitDl(event)">
+          <div class="outfit-cat-icon" style="background:${cat.color}22;color:${cat.color}">${cat.icon}</div>
+          <div class="outfit-body">
+            <div class="outfit-texto">${o.texto}</div>
+            <div class="outfit-cat-label" style="color:${cat.color}">${cat.label}</div>
+          </div>
+          <div class="outfit-actions">
+            <button class="outfit-edit-btn" onclick="startEditOutfit(${di},${idx})" title="Editar">✏️</button>
+            <button class="gasto-del" onclick="delOutfit(${di},${o.id})" title="Eliminar">×</button>
+          </div>
+        </div>`;
+      }
     });
     oh+=`</div>`;
 
+    // Add form with category select
     oh+=`<div class="gasto-form${ofFormOpen?' open':''}" id="of-${di}">
       <div class="gf-row" style="grid-template-columns:1fr">
-        <input class="gf-input" id="of-txt-${di}" placeholder="Ej: Camisa de lino y short" 
+        <select class="gf-select" id="of-cat-${di}" style="margin-bottom:.4rem">${catOpts}</select>
+        <input class="gf-input" id="of-txt-${di}" placeholder="Ej: Camisa de lino blanca, Short beige..." 
           onkeydown="if(event.key==='Enter')addOutfit(${di})"/>
       </div>
       <div class="gf-actions" style="margin-top:.4rem">
@@ -658,16 +776,27 @@ function renderOutfits(){
       </div>
     </div>`;
 
+    // Day summary chips
+    let daySumH='';
+    if(os.length>0){
+      const chips=OCAT_KEYS.filter(k=>dayCounts[k]>0).map(k=>{
+        const c=OCAT[k];
+        return `<span class="outfit-day-chip" style="color:${c.color}">${c.icon} ${dayCounts[k]}</span>`;
+      }).join('');
+      daySumH=`<div class="outfit-day-summary">${chips}</div>`;
+    }
+
     h+=`<div class="day-card" id="dc-${di}">
       <div class="dh" onclick="togDay(${di})">
         <div class="dnum">${String(di+1).padStart(2,'0')}</div>
         <div class="dinfo">
           <div class="dtitle">${day.day}</div>
           <div class="dsub">
-            <span class="wchip">${day.route}</span>
+            <span class="outfit-acts-subtitle">${actNames}</span>
           </div>
         </div>
         <div class="dright">
+          ${daySummary?`<span class="outfit-header-counts">${daySummary}</span>`:''}
           ${os.length>0?`<span style="font-size:.62rem;color:var(--dim)">${os.length} prendas</span>`:''}
           <svg class="chev${isOpen?' open':''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
         </div>
@@ -682,6 +811,7 @@ function renderOutfits(){
             </button>
           </div>
           ${oh}
+          ${daySumH}
         </div>
       </div>
     </div>`;
