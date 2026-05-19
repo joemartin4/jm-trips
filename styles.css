@@ -14,6 +14,33 @@ body{font-family:'DM Sans',sans-serif;font-weight:400;background:#151a17;color:#
 }
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--borderl);border-radius:3px}
 
+/* ── LOGIN SCREEN ── */
+.login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:radial-gradient(ellipse at 30% 20%,rgba(88,142,104,.12),transparent 60%),radial-gradient(ellipse at 70% 80%,rgba(219,204,162,.08),transparent 50%),var(--bg);padding:1rem}
+.login-card{text-align:center;max-width:380px;width:100%;padding:2.5rem 2rem;background:var(--card);border:1px solid var(--border);border-radius:var(--rl);box-shadow:0 24px 80px rgba(0,0,0,.4)}
+.login-brand{display:flex;align-items:baseline;justify-content:center;gap:.45rem;margin-bottom:.6rem}
+.login-brand h1{font-family:var(--fd);font-size:2.2rem;font-weight:400;letter-spacing:.02em;color:var(--text)}
+.login-brand span{font-size:.65rem;color:var(--gold);letter-spacing:.12em;text-transform:uppercase}
+.login-desc{font-size:.76rem;color:var(--muted);line-height:1.6;margin-bottom:1.8rem}
+.google-btn{display:inline-flex;align-items:center;gap:.6rem;padding:.7rem 1.6rem;background:#fff;color:#333;border:none;border-radius:999px;font-family:var(--fb);font-size:.82rem;font-weight:500;cursor:pointer;transition:var(--tr);box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.google-btn:hover{box-shadow:0 4px 16px rgba(0,0,0,.25);transform:translateY(-1px)}
+.login-error{font-size:.72rem;color:var(--red);margin-top:.8rem;min-height:1.2em}
+
+/* ── USER PILL ── */
+.user-pill{display:flex;align-items:center;gap:.4rem;padding:.2rem .3rem .2rem .5rem;background:var(--card2);border:1px solid var(--border);border-radius:999px}
+.user-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.user-name{font-size:.68rem;color:var(--muted);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.user-logout{width:26px;height:26px;border-radius:50%;background:transparent;border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--dim);transition:var(--tr);flex-shrink:0}
+.user-logout:hover{background:var(--redbg);color:var(--red);border-color:var(--red)}
+.user-logout svg{width:14px;height:14px}
+
+/* ── SHARE MODAL MEMBERS ── */
+.member-row{display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border-bottom:1px solid var(--border)}
+.member-row:last-child{border-bottom:none}
+.member-email{flex:1;font-size:.76rem;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.member-role{font-size:.6rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);flex-shrink:0}
+.member-remove{width:22px;height:22px;border-radius:50%;background:transparent;border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:.7rem;transition:var(--tr);flex-shrink:0}
+.member-remove:hover{background:var(--redbg);color:var(--red);border-color:var(--red)}
+
 /* ── LAYOUT ── */
 .shell{display:grid;grid-template-columns:260px 1fr;grid-template-rows:auto 1fr;min-height:100vh}
 .topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px;border-bottom:1px solid var(--border);background:rgba(14,20,16,.93);backdrop-filter:blur(14px);position:sticky;top:0;z-index:50}
@@ -305,6 +332,7 @@ body{font-family:'DM Sans',sans-serif;font-weight:400;background:#151a17;color:#
   .btn:not(.p){display:none}
   .ppill label{display:none}
   .gf-row3{grid-template-columns:1fr 1fr}
+  .user-name{display:none}
 }
 @media(max-width:480px){
   .hero h2{font-size:1.6rem}
@@ -314,7 +342,7 @@ body{font-family:'DM Sans',sans-serif;font-weight:400;background:#151a17;color:#
 }
 @media print{
   body{background:#fff!important;color:#111!important}
-  .topbar,.sidebar,.mob-nav,.fab,.aedit,.achk,.btn-add-gasto,.gasto-del,.btn{display:none!important}
+  .topbar,.sidebar,.mob-nav,.fab,.aedit,.achk,.btn-add-gasto,.gasto-del,.btn,.user-pill,.login-screen{display:none!important}
   .shell{display:block!important}
   .main{height:auto!important;overflow:visible!important;padding:1cm!important}
   .day-card{border:1px solid #ddd!important;background:#fff!important;page-break-inside:avoid}

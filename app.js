@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, setDoc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 /* ══════════ WEATHER & COLORS ══════════ */
 const WX=[
@@ -49,101 +50,202 @@ const firebaseConfig = {
   messagingSenderId: "295499693424",
   appId: "1:295499693424:web:0f56978753af88c6e1a3b5"
 };
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const docRef = doc(db, "trips", "main");
+const fApp = initializeApp(firebaseConfig);
+const db = getFirestore(fApp);
+const auth = getAuth(fApp);
+const googleProvider = new GoogleAuthProvider();
 
+let currentUser = null;
+let currentTripId = null;
+let currentTripRef = null;
+let unsubTrip = null;
 let isSyncing = false;
+let tripMembers = [];
 
+/* ── Save ── */
 async function saveState(){
   if (isSyncing) return;
-  // Firestore does not support nested arrays. Convert gastos to an object.
   const gastosObj = {};
   gastos.forEach((g, i) => { gastosObj[i] = g; });
   const outfitsObj = {};
-  if(typeof outfits !== 'undefined') outfits.forEach((o, i) => { outfitsObj[i] = o; });
-  
-  const data = { P, IT, gastos: gastosObj, outfits: outfitsObj, people, nid, ngid, noid: typeof noid !== 'undefined' ? noid : 2000, openDays: [...openDays] };
+  outfits.forEach((o, i) => { outfitsObj[i] = o; });
+  const data = { P, IT, gastos: gastosObj, outfits: outfitsObj, people, nid, ngid, noid, openDays: [...openDays] };
   try{ localStorage.setItem('jmtrips_v1', JSON.stringify(data)); }catch(e){}
-  try { await setDoc(docRef, data); } catch(e) { console.error("Firebase Error", e); }
+  if(currentTripRef){
+    try { await setDoc(currentTripRef, data, { merge: true }); }
+    catch(e){ console.error("Firebase save error", e); }
+  }
 }
 
-function initFirebaseSync() {
-  onSnapshot(docRef, (snap) => {
-    if (snap.exists()) {
-      isSyncing = true;
-      const data = snap.data();
-      if(data.P) P = data.P;
-      if(data.IT) IT = data.IT;
-      if(data.gastos) {
-        const newGastos = Array(11).fill(null).map(()=>[]);
-        for (let i = 0; i < 11; i++) {
-          if (data.gastos[i]) newGastos[i] = data.gastos[i];
-        }
-        gastos = newGastos;
-      }
-      if(data.outfits) {
-        const newOutfits = Array(11).fill(null).map(()=>[]);
-        for (let i = 0; i < 11; i++) {
-          if (data.outfits[i]) newOutfits[i] = data.outfits[i];
-        }
-        outfits = newOutfits;
-      }
-      if(data.people) {
-        people = data.people;
-        if(people.length>0 && !activePerson) activePerson = people[0];
-      }
-      if(data.nid) nid = data.nid;
-      if(data.ngid) ngid = data.ngid;
-      if(data.noid) noid = data.noid;
-      if(data.openDays) openDays = new Set(data.openDays);
+/* ── Load from a Firestore data object ── */
+function applyTripData(data){
+  if(data.P) P = data.P;
+  if(data.IT) IT = data.IT;
+  if(data.gastos){
+    const g = Array(11).fill(null).map(()=>[]);
+    for(let i=0;i<11;i++) if(data.gastos[i]) g[i]=data.gastos[i];
+    gastos = g;
+  }
+  if(data.outfits){
+    const o = Array(11).fill(null).map(()=>[]);
+    for(let i=0;i<11;i++) if(data.outfits[i]) o[i]=data.outfits[i];
+    outfits = o;
+  }
+  if(data.people){ people=data.people; if(people.length>0&&!activePerson) activePerson=people[0]; }
+  if(data.nid) nid=data.nid;
+  if(data.ngid) ngid=data.ngid;
+  if(data.noid) noid=data.noid;
+  if(data.openDays) openDays=new Set(data.openDays);
+  if(data.memberEmails) tripMembers=data.memberEmails;
+}
+
+/* ── Load from localStorage (cache) ── */
+function loadLocalState(){
+  try{
+    const raw=localStorage.getItem('jmtrips_v1');
+    if(raw){ const s=JSON.parse(raw); applyTripData(s); }
+  }catch(e){}
+}
+
+/* ── Real-time sync listener ── */
+function startTripSync(){
+  if(unsubTrip) unsubTrip();
+  if(!currentTripRef) return;
+  unsubTrip = onSnapshot(currentTripRef, (snap)=>{
+    if(snap.exists()){
+      isSyncing=true;
+      applyTripData(snap.data());
+      if($('pcount')) $('pcount').textContent=P;
       render();
-      isSyncing = false;
-    } else {
-      saveState();
+      isSyncing=false;
     }
   });
 }
 
-function loadState(){
+/* ══════════ AUTH & TRIP MANAGEMENT ══════════ */
+window.googleLogin = function googleLogin(){
+  const errEl=$('login-error');
+  if(errEl) errEl.textContent='';
+  signInWithPopup(auth, googleProvider).catch(err=>{
+    console.error("Login error:", err);
+    if(errEl) errEl.textContent='Error al iniciar sesión. Intenta de nuevo.';
+  });
+}
+
+window.logout = function logout(){
+  if(!confirm('¿Cerrar sesión?')) return;
+  signOut(auth);
+}
+
+async function loadUserTrip(){
+  const q = query(collection(db,'trips'), where('memberEmails','array-contains', currentUser.email));
+  const snap = await getDocs(q);
+  if(!snap.empty){
+    const tripDoc=snap.docs[0];
+    currentTripId=tripDoc.id;
+    currentTripRef=doc(db,'trips',currentTripId);
+    applyTripData(tripDoc.data());
+    startTripSync();
+  } else {
+    await migrateOrCreateTrip();
+  }
+}
+
+async function migrateOrCreateTrip(){
+  // Try old trips/main document first
   try{
-    const raw=localStorage.getItem('jmtrips_v1');
-    if(raw) {
-      const s=JSON.parse(raw);
-      if(s.P) P=s.P;
-      if(s.IT) IT=s.IT;
-      if(s.gastos) {
-        if (Array.isArray(s.gastos)) gastos = s.gastos; 
-        else {
-           const newGastos = Array(11).fill(null).map(()=>[]);
-           for (let i = 0; i < 11; i++) {
-             if (s.gastos[i]) newGastos[i] = s.gastos[i];
-           }
-           gastos = newGastos;
-        }
-      }
-      if(s.outfits) {
-        if (Array.isArray(s.outfits)) outfits = s.outfits; 
-        else {
-           const newOutfits = Array(11).fill(null).map(()=>[]);
-           for (let i = 0; i < 11; i++) {
-             if (s.outfits[i]) newOutfits[i] = s.outfits[i];
-           }
-           outfits = newOutfits;
-        }
-      }
-      if(s.people) {
-        people=s.people;
-        if(people.length>0 && !activePerson) activePerson = people[0];
-      }
-      if(s.nid) nid=s.nid;
-      if(s.ngid) ngid=s.ngid;
-      if(s.noid) noid=s.noid;
-      if(s.openDays) openDays=new Set(s.openDays);
+    const mainSnap=await getDoc(doc(db,'trips','main'));
+    if(mainSnap.exists()) applyTripData(mainSnap.data());
+    else loadLocalState();
+  }catch(e){ loadLocalState(); }
+  // Create new trip
+  const gastosObj={}; gastos.forEach((g,i)=>{gastosObj[i]=g;});
+  const outfitsObj={}; outfits.forEach((o,i)=>{outfitsObj[i]=o;});
+  const tripData={
+    owner:currentUser.uid, ownerEmail:currentUser.email,
+    memberEmails:[currentUser.email], tripName:'Panamá 2025',
+    P, IT, gastos:gastosObj, outfits:outfitsObj, people, nid, ngid, noid, openDays:[...openDays]
+  };
+  const newRef=await addDoc(collection(db,'trips'), tripData);
+  currentTripId=newRef.id;
+  currentTripRef=doc(db,'trips',currentTripId);
+  tripMembers=[currentUser.email];
+  startTripSync();
+}
+
+function updateUserUI(){
+  const av=$('user-avatar'), nm=$('user-name');
+  if(av){ av.src=currentUser.photoURL||''; av.style.display=currentUser.photoURL?'block':'none'; }
+  if(nm) nm.textContent=currentUser.displayName||currentUser.email;
+}
+
+function setupAuth(){
+  onAuthStateChanged(auth, async(user)=>{
+    if(user){
+      currentUser=user;
+      // Save user profile
+      try{ await setDoc(doc(db,'users',user.uid),{email:user.email,displayName:user.displayName,photoURL:user.photoURL},{merge:true}); }catch(e){}
+      // Show app
+      $('login-screen').style.display='none';
+      $('app-shell').style.display='';
+      updateUserUI();
+      await loadUserTrip();
+      if($('pcount')) $('pcount').textContent=P;
+      render();
+    } else {
+      currentUser=null;
+      if(unsubTrip) unsubTrip();
+      currentTripRef=null; currentTripId=null;
+      $('login-screen').style.display='flex';
+      $('app-shell').style.display='none';
     }
-  }catch(e){}
-  initFirebaseSync();
-  return true;
+  });
+}
+
+/* ── Share Trip ── */
+window.openShareModal = function openShareModal(){
+  renderMembersList();
+  $('share-modal-bg').classList.add('open');
+}
+window.closeShareModal = function closeShareModal(){
+  $('share-modal-bg').classList.remove('open');
+}
+window.shareModalBgClick = function shareModalBgClick(e){
+  if(e.target.id==='share-modal-bg') closeShareModal();
+}
+window.shareTrip = async function shareTrip(){
+  const email=$('share-email')?.value.trim().toLowerCase();
+  if(!email||!email.includes('@'))return;
+  if(tripMembers.includes(email)){ alert('Esta persona ya tiene acceso.'); return; }
+  if(!currentTripRef) return;
+  try{
+    await updateDoc(currentTripRef, { memberEmails: arrayUnion(email) });
+    tripMembers.push(email);
+    $('share-email').value='';
+    renderMembersList();
+  }catch(e){ console.error('Share error',e); alert('Error al compartir. Intenta de nuevo.'); }
+}
+window.removeMember = async function removeMember(email){
+  if(!currentTripRef||!currentUser) return;
+  if(email===currentUser.email){ alert('No puedes quitarte a ti mismo.'); return; }
+  if(!confirm(`¿Quitar acceso a ${email}?`)) return;
+  try{
+    await updateDoc(currentTripRef, { memberEmails: arrayRemove(email) });
+    tripMembers=tripMembers.filter(e=>e!==email);
+    renderMembersList();
+  }catch(e){ console.error('Remove error',e); }
+}
+function renderMembersList(){
+  const el=$('members-list');
+  if(!el) return;
+  el.innerHTML=tripMembers.map(em=>{
+    const isOwner=em===(currentUser?.email);
+    return `<div class="member-row">
+      <span class="member-email">${em}</span>
+      <span class="member-role">${isOwner?'Propietario':'Invitado'}</span>
+      ${!isOwner?`<button class="member-remove" onclick="removeMember('${em}')">&times;</button>`:''}
+    </div>`;
+  }).join('');
 }
 
 window.resetState = function resetState(){
@@ -909,7 +1011,5 @@ document.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openAdd();}
 });
 
-// Load saved state, then render
-loadState();
-$('pcount').textContent=P;
-render();
+// Start auth – everything loads inside the auth state handler
+setupAuth();

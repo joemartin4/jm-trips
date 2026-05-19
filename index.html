@@ -10,7 +10,25 @@
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div class="shell">
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <h1>JM Trips</h1>
+      <span>· Itinerario de viaje</span>
+    </div>
+    <p class="login-desc">Inicia sesión para acceder a tu itinerario, sincronizar entre dispositivos y compartir con tus compañeros de viaje.</p>
+    <button class="google-btn" onclick="googleLogin()">
+      <svg viewBox="0 0 48 48" width="20" height="20"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59A14.5 14.5 0 019.5 24c0-1.59.28-3.14.77-4.59l-7.98-6.19A23.95 23.95 0 000 24c0 3.77.9 7.35 2.56 10.52l7.97-5.93z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.93C6.51 42.62 14.62 48 24 48z"/></svg>
+      Iniciar sesión con Google
+    </button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- APP SHELL (hidden until login) -->
+<div class="shell" id="app-shell" style="display:none">
 
 <!-- TOPBAR -->
 <header class="topbar">
@@ -22,6 +40,10 @@
       <span class="pc" id="pcount">2</span>
       <button class="pb" onclick="chgP(1)">+</button>
     </div>
+    <button class="btn" onclick="openShareModal()">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z"/></svg>
+      Compartir
+    </button>
     <button class="btn" onclick="window.print()">
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.75 19.5m10.56-5.671-.441 5.671M3 8.25l2.25-2.25h13.5L21 8.25m-18 0v9a2.25 2.25 0 002.25 2.25h13.5A2.25 2.25 0 0021 17.25V8.25"/></svg>
       Imprimir
@@ -34,6 +56,13 @@
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
       Nueva actividad
     </button>
+    <div class="user-pill" id="user-pill">
+      <img id="user-avatar" src="" alt="" class="user-avatar" style="display:none"/>
+      <span id="user-name" class="user-name"></span>
+      <button class="user-logout" onclick="logout()" title="Cerrar sesión">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"/></svg>
+      </button>
+    </div>
   </div>
 </header>
 
@@ -102,6 +131,26 @@
       <button class="mbtn pri" onclick="saveAct()">Guardar actividad</button>
       <button class="mbtn sec" onclick="closeModal()">Cancelar</button>
       <button class="mbtn del" id="del-btn" style="display:none" onclick="delAct()">Eliminar actividad</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHARE MODAL -->
+<div class="modal-bg" id="share-modal-bg" onclick="shareModalBgClick(event)">
+  <div class="modal">
+    <h2>Compartir viaje</h2>
+    <p style="font-size:.74rem;color:var(--muted);margin-bottom:1rem">Invita a otras personas a ver y editar este itinerario. Solo necesitan una cuenta de Google.</p>
+    <div class="field">
+      <label>Email de la persona a invitar</label>
+      <input id="share-email" type="email" placeholder="ejemplo@gmail.com" onkeydown="if(event.key==='Enter')shareTrip()"/>
+    </div>
+    <div class="mact" style="margin-top:.5rem;margin-bottom:1rem">
+      <button class="mbtn pri" onclick="shareTrip()">Enviar invitación</button>
+    </div>
+    <div class="fdiv">Personas con acceso</div>
+    <div id="members-list"></div>
+    <div class="mact" style="margin-top:1rem">
+      <button class="mbtn sec" onclick="closeShareModal()">Cerrar</button>
     </div>
   </div>
 </div>
