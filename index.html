@@ -73,6 +73,7 @@
     <div class="sb-tab" id="st-gas" onclick="go('gas')">Gastos</div>
     <div class="sb-tab" id="st-mv" onclick="go('mv')">Mi viaje</div>
     <div class="sb-tab" id="st-outfits" onclick="go('outfits')">Equipaje</div>
+    <div class="sb-tab" id="st-armario" onclick="go('armario')">Mi Armario</div>
   </div>
   <div class="sb-sum" id="sb-sum"></div>
   <div class="sb-sec">Días del viaje</div>
@@ -100,6 +101,10 @@
   <button class="mob-btn" id="mt-outfits" onclick="go('outfits')">
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
     Equipaje
+  </button>
+  <button class="mob-btn" id="mt-armario" onclick="go('armario')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a3 3 0 00-3 3v2.25a2.25 2.25 0 00-2.25 2.25v6.75A2.25 2.25 0 009 19.5h6a2.25 2.25 0 002.25-2.25v-6.75A2.25 2.25 0 0015 8.25V6a3 3 0 00-3-3z"/></svg>
+    Armario
   </button>
 </nav>
 <button class="fab" onclick="openAdd()">
@@ -151,6 +156,53 @@
     <div id="members-list"></div>
     <div class="mact" style="margin-top:1rem">
       <button class="mbtn sec" onclick="closeShareModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CLOTH TO OUTFITS DIALOG -->
+<div class="modal-bg" id="cloth-dates-modal-bg" onclick="clothDatesModalBgClick(event)">
+  <div class="modal">
+    <h2>Agregar prenda a Equipaje</h2>
+    <p style="font-size:.74rem;color:var(--muted);margin-bottom:1rem">Selecciona uno o más días para agregar esta prenda al equipaje.</p>
+    <div class="field">
+      <label>Momento del día</label>
+      <select id="cloth-dates-moment" style="width:100%;margin-bottom:1rem">
+        <option value="dia">☀️ Día (AM)</option>
+        <option value="tarde">🌙 Tarde/Noche (PM)</option>
+      </select>
+    </div>
+    <div class="field"><label>Selecciona los días</label>
+      <div id="cloth-dates-list" class="dates-checkbox-list"></div>
+    </div>
+    <div class="mact" style="margin-top:1.5rem">
+      <button class="mbtn pri" onclick="saveClothToDates()">Agregar a Equipaje</button>
+      <button class="mbtn sec" onclick="closeClothDatesModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHOOSE CLOTHES FROM WARDROBE DIALOG -->
+<div class="modal-bg" id="add-from-wardrobe-modal-bg" onclick="addFromWardrobeModalBgClick(event)">
+  <div class="modal" style="max-width:500px">
+    <h2>Añadir prendas desde mi Armario</h2>
+    <p style="font-size:.74rem;color:var(--muted);margin-bottom:1rem">Selecciona las prendas que deseas usar este día.</p>
+    <div class="field">
+      <label>Momento del día</label>
+      <select id="wardrobe-add-moment" style="width:100%;margin-bottom:1rem">
+        <option value="dia">☀️ Día (AM)</option>
+        <option value="tarde">🌙 Tarde/Noche (PM)</option>
+      </select>
+    </div>
+    <div class="field" style="margin-bottom: .5rem">
+      <input id="wardrobe-search-input" placeholder="Buscar prenda por nombre..." class="gf-input" style="width:100%" oninput="renderWardrobeSelectionList()"/>
+    </div>
+    <div class="wardrobe-selection-container">
+      <div id="wardrobe-selection-list" class="wardrobe-selection-list"></div>
+    </div>
+    <div class="mact" style="margin-top:1.5rem">
+      <button class="mbtn pri" onclick="addSelectedClothesToDay()">Añadir al día</button>
+      <button class="mbtn sec" onclick="closeAddFromWardrobeModal()">Cancelar</button>
     </div>
   </div>
 </div>

@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot, setDoc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, setDoc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 /* ══════════ WEATHER & COLORS ══════════ */
@@ -61,6 +61,15 @@ let currentTripRef = null;
 let unsubTrip = null;
 let isSyncing = false;
 let tripMembers = [];
+let armario = [];
+let unsubArmario = null;
+let wardrobeFilter = 'all';
+let wardrobeSort = 'added';
+let selectedClothForDates = null;
+let selectedWardrobeClothes = new Set();
+let activeDayForWardrobe = null;
+let uploadingClothImage = null;
+let isAnalyzingImage = false;
 
 /* ── Save ── */
 async function saveState(){
@@ -122,6 +131,19 @@ function startTripSync(){
   });
 }
 
+function startArmarioSync(){
+  if(unsubArmario) unsubArmario();
+  if(!currentTripRef) return;
+  const colRef = collection(db, 'trips', currentTripId, 'armario');
+  unsubArmario = onSnapshot(colRef, (snap)=>{
+    armario = [];
+    snap.forEach(docSnap => {
+      armario.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    if(VIEW === 'armario') render();
+  });
+}
+
 /* ══════════ AUTH & TRIP MANAGEMENT ══════════ */
 window.googleLogin = function googleLogin(){
   const errEl=$('login-error');
@@ -146,6 +168,7 @@ async function loadUserTrip(){
     currentTripRef=doc(db,'trips',currentTripId);
     applyTripData(tripDoc.data());
     startTripSync();
+    startArmarioSync();
   } else {
     await migrateOrCreateTrip();
   }
@@ -171,6 +194,7 @@ async function migrateOrCreateTrip(){
   currentTripRef=doc(db,'trips',currentTripId);
   tripMembers=[currentUser.email];
   startTripSync();
+  startArmarioSync();
 }
 
 function updateUserUI(){
@@ -195,6 +219,7 @@ function setupAuth(){
     } else {
       currentUser=null;
       if(unsubTrip) unsubTrip();
+      if(unsubArmario) { unsubArmario(); unsubArmario=null; }
       currentTripRef=null; currentTripId=null;
       $('login-screen').style.display='flex';
       $('app-shell').style.display='none';
@@ -380,8 +405,9 @@ window.addOutfit = function addOutfit(di){
   if(!activePerson)return;
   const t=$(`of-txt-${di}`)?.value.trim();
   const cat=$(`of-cat-${di}`)?.value||'superior';
+  const momento=$(`of-mom-${di}`)?.value||'dia';
   if(!t)return;
-  outfits[di].push({id:noid++,persona:activePerson,texto:t,cat});
+  outfits[di].push({id:noid++,persona:activePerson,texto:t,cat,momento});
   openOutfitForms.delete(di);
   render();
 }
@@ -401,9 +427,11 @@ window.startEditOutfit = function startEditOutfit(di,idx){
 window.saveEditOutfit = function saveEditOutfit(di,idx){
   const t=$(`oe-txt-${di}-${idx}`)?.value.trim();
   const cat=$(`oe-cat-${di}-${idx}`)?.value||'superior';
+  const momento=$(`oe-mom-${di}-${idx}`)?.value||'dia';
   if(!t)return;
   outfits[di][idx].texto=t;
   outfits[di][idx].cat=cat;
+  outfits[di][idx].momento=momento;
   editingOutfit=null;
   render();
 }
@@ -432,6 +460,10 @@ window.outfitDdr = function outfitDdr(e,di,idx){
   const personOutfits=outfits[di].filter(o=>o.persona===activePerson);
   const allOther=outfits[di].filter(o=>o.persona!==activePerson);
   const srcItem=personOutfits.splice(outfitDragSrc.idx,1)[0];
+  const destItem=personOutfits[idx];
+  if(destItem&&destItem.momento){
+    srcItem.momento=destItem.momento;
+  }
   personOutfits.splice(idx,0,srcItem);
   outfits[di]=[...allOther,...personOutfits];
   outfitDragSrc=null;
@@ -775,10 +807,15 @@ function renderOutfits(){
   let globalCounts={};
   OCAT_KEYS.forEach(k=>globalCounts[k]=0);
   if(activePerson){
+    const uniqueItems=new Set();
     IT.forEach((_,di)=>{
       outfits[di].filter(o=>o.persona===activePerson).forEach(o=>{
         const c=o.cat||'superior';
-        globalCounts[c]=(globalCounts[c]||0)+1;
+        const key=`${c}::${o.texto.trim().toLowerCase()}`;
+        if(!uniqueItems.has(key)){
+          uniqueItems.add(key);
+          globalCounts[c]=(globalCounts[c]||0)+1;
+        }
       });
     });
   }
@@ -828,50 +865,129 @@ function renderOutfits(){
     let oh=`<div class="gasto-list">`;
     if(os.length===0 && !ofFormOpen){
       oh+=`<div class="gasto-empty">Sin ropa planificada para ${activePerson} este día.</div>`;
-    }
-    os.forEach((o,idx)=>{
-      const cat=OCAT[o.cat||'superior']||OCAT.superior;
-      const isEditing=editingOutfit&&editingOutfit.di===di&&editingOutfit.idx===idx;
-      if(isEditing){
-        // Inline edit mode
-        const editCatOpts=OCAT_KEYS.map(k=>`<option value="${k}"${(o.cat||'superior')===k?' selected':''}>${OCAT[k].icon} ${OCAT[k].label}</option>`).join('');
-        oh+=`<div class="outfit-edit-form">
-          <select class="gf-select" id="oe-cat-${di}-${idx}" style="margin-bottom:.4rem">${editCatOpts}</select>
-          <input class="gf-input" id="oe-txt-${di}-${idx}" value="${o.texto.replace(/"/g,'&quot;')}" 
-            onkeydown="if(event.key==='Enter')saveEditOutfit(${di},${idx});if(event.key==='Escape')cancelEditOutfit()"/>
-          <div class="gf-actions" style="margin-top:.4rem">
-            <button class="gf-save" onclick="saveEditOutfit(${di},${idx})">✓ Guardar</button>
-            <button class="gf-cancel" onclick="cancelEditOutfit()">Cancelar</button>
-          </div>
-        </div>`;
+    } else {
+      const diaOutfits = os.filter(o => o.momento !== 'tarde');
+      const tardeOutfits = os.filter(o => o.momento === 'tarde');
+
+      // ☀️ Día (AM)
+      oh+=`<div class="outfit-group-title">☀️ Día (AM)</div>`;
+      if(diaOutfits.length===0){
+        oh+=`<div class="gasto-empty" style="padding:.2rem 0; font-size:.68rem">Sin prendas para el día</div>`;
       } else {
-        oh+=`<div class="outfit-item"
-          draggable="true"
-          ondragstart="outfitDs(event,${di},${idx})"
-          ondragover="outfitDov(event)"
-          ondrop="outfitDdr(event,${di},${idx})"
-          ondragleave="outfitDl(event)">
-          <div class="outfit-cat-icon" style="background:${cat.color}22;color:${cat.color}">${cat.icon}</div>
-          <div class="outfit-body">
-            <div class="outfit-texto">${o.texto}</div>
-            <div class="outfit-cat-label" style="color:${cat.color}">${cat.label}</div>
-          </div>
-          <div class="outfit-actions">
-            <button class="outfit-edit-btn" onclick="startEditOutfit(${di},${idx})" title="Editar">✏️</button>
-            <button class="gasto-del" onclick="delOutfit(${di},${o.id})" title="Eliminar">×</button>
-          </div>
-        </div>`;
+        diaOutfits.forEach((o)=>{
+          const realIdx=outfits[di].indexOf(o);
+          const personIdx=os.indexOf(o);
+          const cat=OCAT[o.cat||'superior']||OCAT.superior;
+          const isEditing=editingOutfit&&editingOutfit.di===di&&editingOutfit.idx===realIdx;
+          if(isEditing){
+            const editCatOpts=OCAT_KEYS.map(k=>`<option value="${k}"${(o.cat||'superior')===k?' selected':''}>${OCAT[k].icon} ${OCAT[k].label}</option>`).join('');
+            const editMomOpts=`
+              <option value="dia"${o.momento!=='tarde'?' selected':''}>☀️ Día (AM)</option>
+              <option value="tarde"${o.momento==='tarde'?' selected':''}>🌙 Tarde/Noche (PM)</option>
+            `;
+            oh+=`<div class="outfit-edit-form">
+              <div class="gf-row" style="grid-template-columns: 1fr 1fr; margin-bottom: .4rem;">
+                <select class="gf-select" id="oe-cat-${di}-${realIdx}">${editCatOpts}</select>
+                <select class="gf-select" id="oe-mom-${di}-${realIdx}">${editMomOpts}</select>
+              </div>
+              <input class="gf-input" id="oe-txt-${di}-${realIdx}" value="${o.texto.replace(/"/g,'&quot;')}" 
+                onkeydown="if(event.key==='Enter')saveEditOutfit(${di},${realIdx});if(event.key==='Escape')cancelEditOutfit()"/>
+              <div class="gf-actions" style="margin-top:.4rem">
+                <button class="gf-save" onclick="saveEditOutfit(${di},${realIdx})">✓ Guardar</button>
+                <button class="gf-cancel" onclick="cancelEditOutfit()">Cancelar</button>
+              </div>
+            </div>`;
+          } else {
+            const wMatch = o.wardrobeId ? armario.find(a=>a.id===o.wardrobeId) : null;
+            const thumbH = wMatch&&wMatch.imagen
+              ? `<img class="outfit-img-thumb" src="${wMatch.imagen}" alt=""/>`
+              : `<div class="outfit-cat-icon" style="background:${cat.color}22;color:${cat.color}">${cat.icon}</div>`;
+            oh+=`<div class="outfit-item"
+              draggable="true"
+              ondragstart="outfitDs(event,${di},${personIdx})"
+              ondragover="outfitDov(event)"
+              ondrop="outfitDdr(event,${di},${personIdx})"
+              ondragleave="outfitDl(event)">
+              ${thumbH}
+              <div class="outfit-body">
+                <div class="outfit-texto">${o.texto}</div>
+                <div class="outfit-cat-label" style="color:${cat.color}">${cat.label}</div>
+              </div>
+              <div class="outfit-actions">
+                <button class="outfit-edit-btn" onclick="startEditOutfit(${di},${realIdx})" title="Editar">✏️</button>
+                <button class="gasto-del" onclick="delOutfit(${di},${o.id})" title="Eliminar">×</button>
+              </div>
+            </div>`;
+          }
+        });
       }
-    });
+
+      // 🌙 Tarde/Noche (PM)
+      oh+=`<div class="outfit-group-title">🌙 Tarde/Noche (PM)</div>`;
+      if(tardeOutfits.length===0){
+        oh+=`<div class="gasto-empty" style="padding:.2rem 0; font-size:.68rem">Sin prendas para la tarde/noche</div>`;
+      } else {
+        tardeOutfits.forEach((o)=>{
+          const realIdx=outfits[di].indexOf(o);
+          const personIdx=os.indexOf(o);
+          const cat=OCAT[o.cat||'superior']||OCAT.superior;
+          const isEditing=editingOutfit&&editingOutfit.di===di&&editingOutfit.idx===realIdx;
+          if(isEditing){
+            const editCatOpts=OCAT_KEYS.map(k=>`<option value="${k}"${(o.cat||'superior')===k?' selected':''}>${OCAT[k].icon} ${OCAT[k].label}</option>`).join('');
+            const editMomOpts=`
+              <option value="dia"${o.momento!=='tarde'?' selected':''}>☀️ Día (AM)</option>
+              <option value="tarde"${o.momento==='tarde'?' selected':''}>🌙 Tarde/Noche (PM)</option>
+            `;
+            oh+=`<div class="outfit-edit-form">
+              <div class="gf-row" style="grid-template-columns: 1fr 1fr; margin-bottom: .4rem;">
+                <select class="gf-select" id="oe-cat-${di}-${realIdx}">${editCatOpts}</select>
+                <select class="gf-select" id="oe-mom-${di}-${realIdx}">${editMomOpts}</select>
+              </div>
+              <input class="gf-input" id="oe-txt-${di}-${realIdx}" value="${o.texto.replace(/"/g,'&quot;')}" 
+                onkeydown="if(event.key==='Enter')saveEditOutfit(${di},${realIdx});if(event.key==='Escape')cancelEditOutfit()"/>
+              <div class="gf-actions" style="margin-top:.4rem">
+                <button class="gf-save" onclick="saveEditOutfit(${di},${realIdx})">✓ Guardar</button>
+                <button class="gf-cancel" onclick="cancelEditOutfit()">Cancelar</button>
+              </div>
+            </div>`;
+          } else {
+            const wMatch = o.wardrobeId ? armario.find(a=>a.id===o.wardrobeId) : null;
+            const thumbH = wMatch&&wMatch.imagen
+              ? `<img class="outfit-img-thumb" src="${wMatch.imagen}" alt=""/>`
+              : `<div class="outfit-cat-icon" style="background:${cat.color}22;color:${cat.color}">${cat.icon}</div>`;
+            oh+=`<div class="outfit-item"
+              draggable="true"
+              ondragstart="outfitDs(event,${di},${personIdx})"
+              ondragover="outfitDov(event)"
+              ondrop="outfitDdr(event,${di},${personIdx})"
+              ondragleave="outfitDl(event)">
+              ${thumbH}
+              <div class="outfit-body">
+                <div class="outfit-texto">${o.texto}</div>
+                <div class="outfit-cat-label" style="color:${cat.color}">${cat.label}</div>
+              </div>
+              <div class="outfit-actions">
+                <button class="outfit-edit-btn" onclick="startEditOutfit(${di},${realIdx})" title="Editar">✏️</button>
+                <button class="gasto-del" onclick="delOutfit(${di},${o.id})" title="Eliminar">×</button>
+              </div>
+            </div>`;
+          }
+        });
+      }
+    }
     oh+=`</div>`;
 
     // Add form with category select
     oh+=`<div class="gasto-form${ofFormOpen?' open':''}" id="of-${di}">
-      <div class="gf-row" style="grid-template-columns:1fr">
-        <select class="gf-select" id="of-cat-${di}" style="margin-bottom:.4rem">${catOpts}</select>
-        <input class="gf-input" id="of-txt-${di}" placeholder="Ej: Camisa de lino blanca, Short beige..." 
-          onkeydown="if(event.key==='Enter')addOutfit(${di})"/>
+      <div class="gf-row" style="grid-template-columns:1fr 1fr; margin-bottom:.4rem">
+        <select class="gf-select" id="of-cat-${di}">${catOpts}</select>
+        <select class="gf-select" id="of-mom-${di}">
+          <option value="dia">☀️ Día (AM)</option>
+          <option value="tarde">🌙 Tarde/Noche (PM)</option>
+        </select>
       </div>
+      <input class="gf-input" id="of-txt-${di}" placeholder="Ej: Camisa de lino blanca, Short beige..." 
+        onkeydown="if(event.key==='Enter')addOutfit(${di})"/>
       <div class="gf-actions" style="margin-top:.4rem">
         <button class="gf-save" onclick="addOutfit(${di})">✓ Guardar prenda</button>
         <button class="gf-cancel" onclick="toggleOutfitForm(${di})">Cancelar</button>
@@ -905,12 +1021,19 @@ function renderOutfits(){
       </div>
       <div class="card-body${isOpen?' open':''}">
         <div class="gastos-section" style="border-top:none;padding-top:0">
-          <div class="gastos-header">
+          <div class="gastos-header" style="flex-wrap:wrap;gap:.5rem">
             <span class="gastos-title" style="letter-spacing:.05em">👕 Prendas de ${activePerson}</span>
-            <button class="btn-add-gasto" onclick="toggleOutfitForm(${di});event.stopPropagation()">
-              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-              Añadir prenda
-            </button>
+            <div style="display:flex;gap:.4rem;flex-shrink:0">
+              ${armario.length>0?`<button class="btn-add-gasto" style="background:var(--goldg);border-color:var(--goldd);color:var(--gold)" onclick="openAddFromWardrobeModal(${di});event.stopPropagation()">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a3 3 0 00-3 3v2.25a2.25 2.25 0 00-2.25 2.25v6.75A2.25 2.25 0 009 19.5h6a2.25 2.25 0 002.25-2.25v-6.75A2.25 2.25 0 0015 8.25V6a3 3 0 00-3-3z"/></svg>
+                Armario
+              </button>`:''
+              }
+              <button class="btn-add-gasto" onclick="toggleOutfitForm(${di});event.stopPropagation()">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                Manual
+              </button>
+            </div>
           </div>
           ${oh}
           ${daySumH}
@@ -929,13 +1052,14 @@ function render(){
   if(VIEW==='it') mc.innerHTML=renderIt();
   else if(VIEW==='gas') mc.innerHTML=renderGas();
   else if(VIEW==='outfits') mc.innerHTML=renderOutfits();
+  else if(VIEW==='armario') mc.innerHTML=renderArmario();
   else mc.innerHTML=renderMv();
   renderSidebar();
 }
 
 window.go = function go(v){
   VIEW=v;
-  ['it','gas','mv','outfits'].forEach(k=>{
+  ['it','gas','mv','outfits','armario'].forEach(k=>{
     $('st-'+k)?.classList.toggle('active',k===v);
     $('mt-'+k)?.classList.toggle('active',k===v);
   });
@@ -1007,9 +1131,386 @@ window.delAct = function delAct(){IT[editCtx.di].acts.splice(editCtx.ai,1);close
 window.closeModal = function closeModal(){$('modal-bg').classList.remove('open');editCtx=null;selDay=null;}
 window.bgClick = function bgClick(e){if(e.target.id==='modal-bg')closeModal();}
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape')closeModal();
+  if(e.key==='Escape'){
+    closeModal();
+    closeClothDatesModal();
+    closeAddFromWardrobeModal();
+  }
   if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();openAdd();}
 });
+
+/* ══════════════════════════════════════════════════════
+   MI ARMARIO – CLOSET MANAGEMENT
+══════════════════════════════════════════════════════ */
+
+/* ── Image Compression ── */
+async function compressImage(file, maxPx=300){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      const scale = Math.min(1, maxPx/Math.max(img.width,img.height));
+      const w = Math.round(img.width*scale);
+      const h = Math.round(img.height*scale);
+      const canvas = document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.src = url;
+  });
+}
+
+/* ── AI Categorization via Firebase Vertex AI ── */
+async function classifyImageWithAI(base64data, mimeType){
+  // Try Firebase Vertex AI (Gemini)
+  try {
+    const endpoint = `https://firebasevertexai.googleapis.com/v1beta/projects/jm-trips/locations/us-central1/publishers/google/models/gemini-2.5-flash:generateContent?key=${firebaseConfig.apiKey}`;
+    const body = {
+      contents: [{
+        parts: [
+          { text: 'Clasifica esta prenda de ropa en UNA de estas categorías exactas: superior, inferior, conjunto, calzado, accesorios. Responde SOLO con la palabra de la categoría, sin más texto.' },
+          { inlineData: { mimeType, data: base64data } }
+        ]
+      }],
+      generationConfig: { maxOutputTokens: 20, temperature: 0 }
+    };
+    const resp = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if(resp.ok){
+      const json = await resp.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase() || '';
+      const valid = ['superior','inferior','conjunto','calzado','accesorios'];
+      const found = valid.find(v => text.includes(v));
+      if(found) return found;
+    }
+  } catch(e){ console.warn('AI classify failed', e); }
+  return null; // fallback
+}
+
+/* ── Filename fallback categorizer ── */
+function guessCategory(name){
+  const n = name.toLowerCase();
+  if(/zapato|zapatilla|bota|sandalia|tenis|sneaker|heel|mocasin|chancla|calzado/.test(n)) return 'calzado';
+  if(/pantalon|jean|short|falda|legging|bermuda|inferior/.test(n)) return 'inferior';
+  if(/vestido|traje|conjunto|enterizo|mono|jumpsuit|overol/.test(n)) return 'conjunto';
+  if(/collar|pulsera|aretes|sombrero|gorra|bolso|cinturon|bufanda|accesorio|gafas|reloj|cartera/.test(n)) return 'accesorios';
+  return 'superior'; // default: shirts, polos, etc
+}
+
+/* ── Wardrobe State ── */
+let newClothForm = { nombre:'', cat:'superior', precio:'', fechaCompra:'', imagen:null, imagenMime:null };
+let armarioFormOpen = false;
+
+/* ── Render Mi Armario ── */
+function renderArmario(){
+  // Apply filter & sort
+  let items = [...armario];
+  if(wardrobeFilter!=='all') items = items.filter(i=>i.cat===wardrobeFilter);
+  if(wardrobeSort==='added') items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  else if(wardrobeSort==='purchase') items.sort((a,b)=>{
+    const da = a.fechaCompra||'0', db = b.fechaCompra||'0';
+    return da<db?1:da>db?-1:0;
+  });
+  else if(wardrobeSort==='cat') items.sort((a,b)=>(a.cat||'').localeCompare(b.cat||''));
+  else if(wardrobeSort==='price') items.sort((a,b)=>(b.precio||0)-(a.precio||0));
+
+  const catOpts = OCAT_KEYS.map(k=>`<option value="${k}">${OCAT[k].icon} ${OCAT[k].label}</option>`).join('');
+
+  // Filter buttons
+  const filters = [
+    {key:'all', label:'Todas'},
+    ...OCAT_KEYS.map(k=>({key:k, label:`${OCAT[k].icon} ${OCAT[k].label}`}))
+  ];
+  const filterBtns = filters.map(f=>`<button class="wardrobe-filter-btn${wardrobeFilter===f.key?' active':''}" onclick="setWardrobeFilter('${f.key}')">${f.label}</button>`).join('');
+
+  // Add form HTML
+  let addFormH = '';
+  if(armarioFormOpen){
+    const prevImg = newClothForm.imagen
+      ? `<div class="image-preview-container">
+           <img class="image-preview-img" src="${newClothForm.imagen}" alt=""/>
+           <div class="image-preview-info">${isAnalyzingImage?'<span class="ai-loader">✨ Analizando con IA...</span>':'Imagen cargada'}</div>
+           <button class="image-remove-btn" onclick="removeNewClothImage()">✕</button>
+         </div>`
+      : `<label class="image-upload-wrapper" for="cloth-img-input">
+           <input id="cloth-img-input" type="file" accept="image/*" style="display:none" onchange="handleClothImageUpload(event)"/>
+           <div class="image-upload-icon">📷</div>
+           <div class="image-upload-text">Toca para subir foto<br><small>La IA categoriza automáticamente</small></div>
+         </label>`;
+
+    addFormH = `
+    <div class="day-card" style="margin-bottom:1.5rem;padding:1.2rem">
+      <h3 style="font-family:var(--fd);font-size:1rem;font-weight:400;color:var(--gold);margin-bottom:1rem">✨ Nueva prenda</h3>
+      <div class="field"><label>Foto de la prenda</label>${prevImg}</div>
+      <div class="field">
+        <label>Nombre de la prenda</label>
+        <input id="new-cloth-nombre" class="gf-input" style="width:100%" placeholder="Ej: Camisa de lino blanca" value="${newClothForm.nombre.replace(/"/g,'&quot;')}" oninput="newClothForm.nombre=this.value"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="field">
+          <label>Categoría ${isAnalyzingImage?'<span class="ai-loader">IA...</span>':''}</label>
+          <select id="new-cloth-cat" class="gf-select" style="width:100%">
+            ${OCAT_KEYS.map(k=>`<option value="${k}"${newClothForm.cat===k?' selected':''}>${OCAT[k].icon} ${OCAT[k].label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field">
+          <label>Precio (opcional)</label>
+          <input id="new-cloth-precio" class="gf-input" style="width:100%" type="number" min="0" step="0.5" placeholder="$0.00" value="${newClothForm.precio}" oninput="newClothForm.precio=this.value"/>
+        </div>
+      </div>
+      <div class="field">
+        <label>Fecha de compra (opcional)</label>
+        <input id="new-cloth-fecha" class="gf-input" style="width:100%" type="date" value="${newClothForm.fechaCompra}" oninput="newClothForm.fechaCompra=this.value"/>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-top:.75rem">
+        <button class="mbtn pri" style="flex:1" onclick="saveNewCloth()">Guardar prenda</button>
+        <button class="mbtn sec" style="flex:0 0 auto;padding:.62rem 1rem" onclick="cancelNewCloth()">Cancelar</button>
+      </div>
+    </div>`;
+  }
+
+  // Cards grid
+  const totalAll = armario.length;
+  const cardsH = items.length===0
+    ? `<div class="mv-empty" style="text-align:center">${
+        totalAll===0
+          ? 'Tu armario está vacío.<br>¡Agrega tu primera prenda!'
+          : 'No hay prendas con este filtro.'
+      }</div>`
+    : items.map(item=>{
+        const cat = OCAT[item.cat||'superior']||OCAT.superior;
+        const imgH = item.imagen
+          ? `<img class="wardrobe-img" src="${item.imagen}" alt="${item.nombre}" loading="lazy"/>`
+          : `<div class="wardrobe-img-placeholder">${cat.icon}</div>`;
+        const priceH = item.precio>0 ? `<div class="wardrobe-card-price">$${Number(item.precio).toFixed(2)}</div>` : '';
+        const dateH = item.fechaCompra ? `<div class="wardrobe-card-date">🛒 ${item.fechaCompra.split('-').reverse().join('/')}</div>` : '';
+        return `<div class="wardrobe-card">
+          <div class="wardrobe-img-container">
+            ${imgH}
+            <span class="wardrobe-card-tag" style="background:${cat.color}cc">${cat.icon} ${cat.label}</span>
+          </div>
+          <div class="wardrobe-card-info">
+            <div class="wardrobe-card-name" title="${item.nombre}">${item.nombre}</div>
+            ${priceH}${dateH}
+          </div>
+          <div class="wardrobe-card-actions">
+            <button class="wardrobe-card-btn add-btn" onclick="openClothDatesModal('${item.id}')">
+              🧳 Equipaje
+            </button>
+            <button class="wardrobe-card-btn del-btn" onclick="deleteCloth('${item.id}')">
+              🗑
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+
+  return `<div class="hero" style="margin-bottom:1rem">
+    <div>
+      <h2>Mi <em>Armario</em></h2>
+      <div class="hero-sub">${totalAll} prenda${totalAll!==1?'s':''} · tu ropa guardada</div>
+    </div>
+    ${totalAll>0?`<div class="hstats">
+      ${OCAT_KEYS.filter(k=>armario.some(i=>i.cat===k)).map(k=>{
+        const c=OCAT[k]; const cnt=armario.filter(i=>i.cat===k).length;
+        return `<div class="hstat"><div class="hv">${cnt}</div><div class="hl">${c.label}${cnt!==1?'s':''}</div></div>`;
+      }).join('')}
+    </div>`:''}
+  </div>
+
+  ${!armarioFormOpen?`<button class="mbtn pri" style="width:100%;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:center;gap:.5rem" onclick="openNewClothForm()">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+    Agregar nueva prenda
+  </button>`:''}
+
+  ${addFormH}
+
+  <div class="wardrobe-controls">
+    <div class="wardrobe-filters">${filterBtns}</div>
+    <div class="wardrobe-sort">
+      <label>Ordenar:</label>
+      <select class="wardrobe-sort-select" onchange="setWardrobeSort(this.value)">
+        <option value="added"${wardrobeSort==='added'?' selected':''}>Último agregado</option>
+        <option value="purchase"${wardrobeSort==='purchase'?' selected':''}>Último en comprar</option>
+        <option value="cat"${wardrobeSort==='cat'?' selected':''}>Categoría</option>
+        <option value="price"${wardrobeSort==='price'?' selected':''}>Mayor precio</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="wardrobe-grid">${cardsH}</div>`;
+}
+
+/* ── Wardrobe Controls ── */
+window.setWardrobeFilter = function(f){ wardrobeFilter=f; render(); };
+window.setWardrobeSort = function(s){ wardrobeSort=s; render(); };
+window.openNewClothForm = function(){ armarioFormOpen=true; newClothForm={nombre:'',cat:'superior',precio:'',fechaCompra:'',imagen:null,imagenMime:null}; render(); };
+window.cancelNewCloth = function(){ armarioFormOpen=false; render(); };
+window.removeNewClothImage = function(){ newClothForm.imagen=null; newClothForm.imagenMime=null; render(); };
+
+window.handleClothImageUpload = async function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  // Compress first
+  const compressed = await compressImage(file, 300);
+  const base64 = compressed.split(',')[1];
+  newClothForm.imagen = compressed;
+  newClothForm.imagenMime = 'image/jpeg';
+  // Try AI
+  isAnalyzingImage = true;
+  render();
+  const aiCat = await classifyImageWithAI(base64, 'image/jpeg');
+  if(aiCat){
+    newClothForm.cat = aiCat;
+  } else {
+    // Fallback: guess from filename
+    newClothForm.cat = guessCategory(file.name);
+  }
+  isAnalyzingImage = false;
+  render();
+};
+
+window.saveNewCloth = async function(){
+  // Sync form values from DOM
+  const nombre = ($('new-cloth-nombre')?.value||'').trim();
+  const cat = $('new-cloth-cat')?.value || newClothForm.cat;
+  const precio = parseFloat($('new-cloth-precio')?.value||'0')||0;
+  const fechaCompra = $('new-cloth-fecha')?.value||'';
+  if(!nombre){ $('new-cloth-nombre')?.focus(); return; }
+  if(!currentTripId) return;
+  const item = {
+    nombre, cat, precio, fechaCompra,
+    imagen: newClothForm.imagen||null,
+    createdAt: Date.now()
+  };
+  try{
+    await addDoc(collection(db,'trips',currentTripId,'armario'), item);
+    armarioFormOpen = false;
+    newClothForm = { nombre:'',cat:'superior',precio:'',fechaCompra:'',imagen:null,imagenMime:null };
+    render();
+  } catch(err){ console.error('Error guardando prenda',err); alert('Error al guardar la prenda.'); }
+};
+
+window.deleteCloth = async function(clothId){
+  if(!confirm('¿Eliminar esta prenda del armario?')) return;
+  try{
+    await deleteDoc(doc(db,'trips',currentTripId,'armario',clothId));
+  } catch(e){ console.error(e); }
+};
+
+/* ── Add Cloth to Dates Modal (from Wardrobe card) ── */
+window.openClothDatesModal = function(clothId){
+  selectedClothForDates = clothId;
+  const listEl = $('cloth-dates-list');
+  if(listEl){
+    listEl.innerHTML = IT.map((d,di)=>`
+      <label class="date-checkbox-item">
+        <input type="checkbox" value="${di}" style="accent-color:var(--gold)">
+        <span><strong>${d.day}</strong> · <span style="color:var(--dim);font-size:.65rem">${d.route}</span></span>
+      </label>`).join('');
+  }
+  $('cloth-dates-moment').value = 'dia';
+  $('cloth-dates-modal-bg').classList.add('open');
+};
+window.closeClothDatesModal = function(){
+  $('cloth-dates-modal-bg').classList.remove('open');
+  selectedClothForDates = null;
+};
+window.clothDatesModalBgClick = function(e){ if(e.target.id==='cloth-dates-modal-bg') closeClothDatesModal(); };
+
+window.saveClothToDates = function(){
+  if(!selectedClothForDates || !activePerson) {
+    if(!activePerson) alert('Primero selecciona una persona en la sección Equipaje.');
+    return;
+  }
+  const cloth = armario.find(a=>a.id===selectedClothForDates);
+  if(!cloth) return;
+  const momento = $('cloth-dates-moment')?.value || 'dia';
+  const checked = [...($('cloth-dates-list')?.querySelectorAll('input[type=checkbox]:checked')||[])];
+  if(checked.length===0){ alert('Selecciona al menos un día.'); return; }
+  checked.forEach(cb=>{
+    const di = parseInt(cb.value);
+    outfits[di].push({
+      id: noid++,
+      persona: activePerson,
+      texto: cloth.nombre,
+      cat: cloth.cat||'superior',
+      momento,
+      wardrobeId: cloth.id
+    });
+  });
+  closeClothDatesModal();
+  render();
+};
+
+/* ── Add from Wardrobe Modal (from Outfit day button) ── */
+window.openAddFromWardrobeModal = function(di){
+  activeDayForWardrobe = di;
+  selectedWardrobeClothes = new Set();
+  renderWardrobeSelectionList();
+  $('wardrobe-add-moment').value = 'dia';
+  if($('wardrobe-search-input')) $('wardrobe-search-input').value = '';
+  $('add-from-wardrobe-modal-bg').classList.add('open');
+};
+window.closeAddFromWardrobeModal = function(){
+  $('add-from-wardrobe-modal-bg').classList.remove('open');
+  activeDayForWardrobe = null;
+  selectedWardrobeClothes = new Set();
+};
+window.addFromWardrobeModalBgClick = function(e){ if(e.target.id==='add-from-wardrobe-modal-bg') closeAddFromWardrobeModal(); };
+
+window.renderWardrobeSelectionList = function(){
+  const listEl = $('wardrobe-selection-list');
+  if(!listEl) return;
+  const query = ($('wardrobe-search-input')?.value||'').toLowerCase().trim();
+  const filtered = armario.filter(i=>!query || i.nombre.toLowerCase().includes(query));
+  if(filtered.length===0){
+    listEl.innerHTML = `<div class="wardrobe-selection-empty">No hay prendas${query?' con ese nombre':' en tu armario'}</div>`;
+    return;
+  }
+  listEl.innerHTML = filtered.map(item=>{
+    const cat = OCAT[item.cat||'superior']||OCAT.superior;
+    const sel = selectedWardrobeClothes.has(item.id);
+    const imgH = item.imagen
+      ? `<img class="wardrobe-select-img" src="${item.imagen}" alt=""/>`
+      : `<div class="wardrobe-select-img" style="background:${cat.color}22;display:flex;align-items:center;justify-content:center;font-size:1rem">${cat.icon}</div>`;
+    return `<div class="wardrobe-selection-item${sel?' selected':''}" onclick="toggleWardrobeSelection('${item.id}')">
+      ${imgH}
+      <span class="wardrobe-select-name">${item.nombre}</span>
+      <span class="wardrobe-select-cat" style="background:${cat.color}33;color:${cat.color}">${cat.icon}</span>
+      ${sel?`<svg fill="none" viewBox="0 0 24 24" stroke="var(--gold)" stroke-width="2.5" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>`:''}
+    </div>`;
+  }).join('');
+};
+
+window.toggleWardrobeSelection = function(clothId){
+  if(selectedWardrobeClothes.has(clothId)) selectedWardrobeClothes.delete(clothId);
+  else selectedWardrobeClothes.add(clothId);
+  renderWardrobeSelectionList();
+};
+
+window.addSelectedClothesToDay = function(){
+  if(activeDayForWardrobe===null || !activePerson) {
+    if(!activePerson) alert('Primero selecciona una persona en la sección Equipaje.');
+    return;
+  }
+  if(selectedWardrobeClothes.size===0){ alert('Selecciona al menos una prenda.'); return; }
+  const momento = $('wardrobe-add-moment')?.value || 'dia';
+  selectedWardrobeClothes.forEach(clothId=>{
+    const cloth = armario.find(a=>a.id===clothId);
+    if(!cloth) return;
+    outfits[activeDayForWardrobe].push({
+      id: noid++,
+      persona: activePerson,
+      texto: cloth.nombre,
+      cat: cloth.cat||'superior',
+      momento,
+      wardrobeId: cloth.id
+    });
+  });
+  closeAddFromWardrobeModal();
+  render();
+};
 
 // Start auth – everything loads inside the auth state handler
 setupAuth();

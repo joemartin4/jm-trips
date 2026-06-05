@@ -272,7 +272,8 @@ body{font-family:'DM Sans',sans-serif;font-weight:400;background:#151a17;color:#
 .outfit-actions{display:flex;align-items:center;gap:.35rem;flex-shrink:0}
 .outfit-edit-btn{width:26px;height:26px;border-radius:50%;background:transparent;border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.7rem;transition:var(--tr)}
 .outfit-edit-btn:hover{background:var(--goldg);border-color:var(--goldd)}
-.outfit-edit-form{background:var(--card2);border:1px solid var(--borderl);border-radius:var(--r);padding:.7rem;margin-bottom:.35rem}
+.outfit-group-title{font-size:.63rem;text-transform:uppercase;letter-spacing:.08em;color:var(--gold);margin-top:.75rem;margin-bottom:.45rem;display:flex;align-items:center;gap:.45rem;font-weight:500}
+.outfit-group-title::after{content:'';flex:1;height:1px;background:var(--border)}
 
 /* outfit subtitles */
 .outfit-acts-subtitle{font-size:.63rem;color:var(--dim);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -349,4 +350,361 @@ body{font-family:'DM Sans',sans-serif;font-weight:400;background:#151a17;color:#
   .card-body{display:block!important}
   .act{background:#f8f8f8!important;border-color:#eee!important}
   :root{--text:#111;--muted:#555;--dim:#888;--gold:#856c3a;--teal:#2d6e5a}
+}
+
+/* ── WARDROBE (MI ARMARIO) ── */
+.wardrobe-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.2rem;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.wardrobe-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.wardrobe-filter-btn {
+  background: var(--card2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-family: var(--fb);
+  cursor: pointer;
+  transition: var(--tr);
+}
+.wardrobe-filter-btn:hover {
+  border-color: var(--borderl);
+  color: var(--text);
+}
+.wardrobe-filter-btn.active {
+  background: var(--goldg);
+  color: var(--gold);
+  border-color: var(--goldd);
+}
+.wardrobe-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.wardrobe-sort label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dim);
+}
+.wardrobe-sort-select {
+  background: var(--card2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.72rem;
+  outline: none;
+  font-family: var(--fb);
+}
+
+/* Closet Grid */
+.wardrobe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.wardrobe-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--rl);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: var(--tr);
+  position: relative;
+}
+.wardrobe-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--borderl);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+.wardrobe-img-container {
+  aspect-ratio: 1;
+  background: var(--card2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+.wardrobe-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.wardrobe-img-placeholder {
+  font-size: 2rem;
+  opacity: 0.4;
+}
+.wardrobe-card-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  color: var(--text);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.wardrobe-card-info {
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.wardrobe-card-name {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wardrobe-card-price {
+  font-size: 0.72rem;
+  color: var(--gold);
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+.wardrobe-card-date {
+  font-size: 0.58rem;
+  color: var(--dim);
+}
+.wardrobe-card-actions {
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+.wardrobe-card-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-family: var(--fb);
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: var(--tr);
+  text-align: center;
+}
+.wardrobe-card-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+.wardrobe-card-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.wardrobe-card-btn.add-btn {
+  color: var(--gold);
+}
+.wardrobe-card-btn.add-btn:hover {
+  background: var(--goldg);
+}
+.wardrobe-card-btn.del-btn {
+  color: var(--red);
+}
+.wardrobe-card-btn.del-btn:hover {
+  background: var(--redbg);
+}
+
+/* Image Upload UI */
+.image-upload-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--r);
+  padding: 1.2rem;
+  background: var(--card2);
+  cursor: pointer;
+  transition: var(--tr);
+  text-align: center;
+}
+.image-upload-wrapper:hover {
+  border-color: var(--goldd);
+  background: var(--hover);
+}
+.image-upload-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.35rem;
+  color: var(--gold);
+}
+.image-upload-text {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.image-preview-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.5rem;
+  position: relative;
+}
+.image-preview-img {
+  width: 50px;
+  height: 50px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: #000;
+}
+.image-preview-info {
+  flex: 1;
+  font-size: 0.65rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--red);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+}
+
+/* Date Selection Modal checkboxes */
+.dates-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 0.2rem;
+}
+.date-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--r);
+  background: var(--card2);
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: var(--tr);
+}
+.date-checkbox-item:hover {
+  border-color: var(--borderl);
+  background: var(--hover);
+}
+.date-checkbox-item input {
+  cursor: pointer;
+}
+
+/* Outfit image integration */
+.outfit-img-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--card);
+  border: 1px solid var(--border);
+  margin-right: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* Wardrobe Selection modal container */
+.wardrobe-selection-container {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--card2);
+  padding: 0.5rem;
+  max-height: 250px;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+}
+.wardrobe-selection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.wardrobe-selection-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem;
+  border-radius: var(--r);
+  background: var(--card);
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: var(--tr);
+}
+.wardrobe-selection-item:hover {
+  border-color: var(--borderl);
+}
+.wardrobe-selection-item.selected {
+  border-color: var(--goldd);
+  background: var(--goldg);
+}
+.wardrobe-select-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--card2);
+}
+.wardrobe-select-name {
+  flex: 1;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wardrobe-select-cat {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.3);
+  color: var(--dim);
+}
+.wardrobe-selection-empty {
+  font-size: 0.72rem;
+  color: var(--dim);
+  text-align: center;
+  padding: 1.5rem;
+  font-style: italic;
+}
+
+/* Loading overlay */
+.ai-loader {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  color: var(--gold);
+  font-weight: 500;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
 }
